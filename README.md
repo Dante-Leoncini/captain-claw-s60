@@ -66,8 +66,6 @@ The screen follows the phone: landscape (320x240) or portrait (240x320).
   nothing is heard. The song itself (`GAME\MUSIC\POWERUP.XMI`, converted to MIDI) is silent on the
   phone's synthesizer even as the first song. The level music works. A suspect is its unusual timing
   division (132 ticks per beat).
-- **Crashes.** The game occasionally crashes, once when shooting a barrel. The N95 has very little
-  free memory while a level runs (about 9 MB). The log loses its last lines when the game crashes.
 - **Level start.** The level is revealed from black with a plain wipe. The original game's
   "unrolling" effect is not reproduced.
 - **Physics.** OpenClaw uses Box2D with values tuned by eye. Movement, jumps and enemies do not feel

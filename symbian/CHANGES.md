@@ -127,7 +127,5 @@ Captain Claw (1997).
 ## Still different from the original
 
 - **Power-up music:** silent on the phone.
-- **Level reveal:** the level is revealed with a plain wipe, not the original's rolling effect.
-- **Crashes:** occasional, most likely from the little memory left while a level runs.
-- **Physics in general.** OpenClaw uses Box2D with values tuned by eye, not the original game's
+- **Level reveal:** the level is revealed with a plain wipe, not the original's rolling effect.- **Physics in general.** OpenClaw uses Box2D with values tuned by eye, not the original game's
   movement.
