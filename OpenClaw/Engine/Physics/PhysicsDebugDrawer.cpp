@@ -29,7 +29,7 @@ void PhysicsDebugDrawer::DrawPolygon(const b2Vec2* vertices, int32 vertexCount, 
         vaY.push_back(worldPos.y - cameraPos.y);
     }
 
-    polygonRGBA(m_pRenderer, vaX.data(), vaY.data(), vertexCount, color.r * 255, color.g * 255, color.b * 255, color.a * 255);
+    polygonRGBA(m_pRenderer, &vaX[0], &vaY[0], vertexCount, color.r * 255, color.g * 255, color.b * 255, color.a * 255);
 }
 
 // This is ~20 times more cpu taxing than DrawPolygon
@@ -49,7 +49,7 @@ void PhysicsDebugDrawer::DrawSolidPolygon(const b2Vec2* vertices, int32 vertexCo
         vaY.push_back(vertices[vertexIdx].y - cameraPos.y);
     }
 
-    filledPolygonRGBA(m_pRenderer, vaX.data(), vaY.data(), vertexCount, color.r * 255, color.g * 255, color.b * 255, (color.a * 255) * 0.5);*/
+    filledPolygonRGBA(m_pRenderer, &vaX[0], &vaY[0], vertexCount, color.r * 255, color.g * 255, color.b * 255, (color.a * 255) * 0.5);*/
 }
 
 void PhysicsDebugDrawer::DrawCircle(const b2Vec2& center, float32 radius, const b2Color& color)

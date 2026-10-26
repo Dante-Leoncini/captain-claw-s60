@@ -1,0 +1,20 @@
+// The game: OpenClaw engine + Box2D + TinyXML, compiled as C++03 against sdl2lite.
+TARGET          openclaw_game.lib
+TARGETTYPE      lib
+
+#include "common.mmh"
+
+USERINCLUDE     ..\compat
+USERINCLUDE     ..\sdl2lite\include
+USERINCLUDE     ..\..\OpenClaw
+USERINCLUDE     ..\..\Box2D
+USERINCLUDE     ..\..\ThirdParty
+USERINCLUDE     ..\..\ThirdParty\Tinyxml
+USERINCLUDE     ..\..\libwap
+SYSTEMINCLUDE   ..\sdl2lite\include
+SYSTEMINCLUDE   ..\..\Box2D
+SYSTEMINCLUDE   ..\..\ThirdParty
+SYSTEMINCLUDE   ..\..\ThirdParty\Tinyxml
+SYSTEMINCLUDE   ..\..\libwap
+
+#include "game_sources.mmh"

@@ -52,7 +52,7 @@ bool PathElevatorComponent::VInit(TiXmlElement* pData)
 
 void PathElevatorComponent::VPostInit()
 {
-    auto pPC = m_pOwner->GetPositionComponent();
+    shared_ptr<PositionComponent> pPC = m_pOwner->GetPositionComponent();
     assert(pPC != nullptr);
 
     m_LastPosition = pPC->GetPosition();
@@ -60,8 +60,9 @@ void PathElevatorComponent::VPostInit()
 
     int i = 0;
     Point previousStepPosition = pPC->GetPosition();
-    for (ElevatorStepDef& elevatorStep : m_Properties.elevatorPath)
+    for (size_t stepIdx = 0; stepIdx < m_Properties.elevatorPath.size(); stepIdx++)
     {
+        ElevatorStepDef& elevatorStep = m_Properties.elevatorPath[stepIdx];
         //assert(elevatorStep.direction != Direction_None && "PathElevator waiting not supported at the moment");
         if (elevatorStep.direction != Direction_None)
         {
@@ -187,7 +188,7 @@ bool PathElevatorComponent::ShouldChangeDirection(const Point& newPosition)
 
 void PathElevatorComponent::AddCarriedBody(b2Body* pBody)
 {
-    for (auto iter = m_CarriedBodiesList.begin(); iter != m_CarriedBodiesList.end(); ++iter)
+    for (std::vector<b2Body*>::iterator iter = m_CarriedBodiesList.begin(); iter != m_CarriedBodiesList.end(); ++iter)
     {
         if ((*iter) == pBody)
         {
@@ -227,8 +228,9 @@ void PathElevatorComponent::OnMoved(Point newPosition)
     std::vector<b2Body*> uniqueCarriedBodies = m_CarriedBodiesList;
     std::sort(uniqueCarriedBodies.begin(), uniqueCarriedBodies.end());
     uniqueCarriedBodies.erase(std::unique(uniqueCarriedBodies.begin(), uniqueCarriedBodies.end()), uniqueCarriedBodies.end());
-    for (b2Body* pCarriedBody : uniqueCarriedBodies)
+    for (size_t i = 0; i < uniqueCarriedBodies.size(); i++)
     {
+        b2Body* pCarriedBody = uniqueCarriedBodies[i];
         if (pCarriedBody->GetType() == b2_dynamicBody)
         {
             Actor* pActor = (Actor*)pCarriedBody->GetUserData();

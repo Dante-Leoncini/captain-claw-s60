@@ -2,13 +2,31 @@
 #include "Logger/Logger.h"
 #include "Util/StringUtil.h"
 
+template <typename K, typename V>
+struct MapEntry
+{
+    K key;
+    V value;
+};
+
+template <typename K, typename V, typename EK, typename EV, size_t N>
+static std::map<K, V> MakeMap(const MapEntry<EK, EV> (&entries)[N])
+{
+    std::map<K, V> result;
+    for (size_t i = 0; i < N; i++)
+    {
+        result.insert(std::make_pair(K(entries[i].key), V(entries[i].value)));
+    }
+    return result;
+}
+
 //=============================================================================
 // ActorPrototype
 //=============================================================================
 
 std::string EnumToString_ActorPrototype(ActorPrototype actorProto)
 {
-    static std::map<ActorPrototype, std::string> actorPrototypeEnumToStringMap =
+    static const MapEntry<ActorPrototype, const char*> actorPrototypeEnumToStringEntries[] =
     {
         // Actor enemies
         { ActorPrototype_Null, "ActorPrototype_Null" },
@@ -245,8 +263,9 @@ std::string EnumToString_ActorPrototype(ActorPrototype actorProto)
         { ActorPrototype_StaticImage, "ActorPrototype_StaticImage" },
         { ActorPrototype_StaticAnimatedImage, "ActorPrototype_StaticAnimatedImage" },
     };
+    static std::map<ActorPrototype, std::string> actorPrototypeEnumToStringMap = MakeMap<ActorPrototype, std::string>(actorPrototypeEnumToStringEntries);
 
-    auto findIt = actorPrototypeEnumToStringMap.find(actorProto);
+    std::map<ActorPrototype, std::string>::iterator findIt = actorPrototypeEnumToStringMap.find(actorProto);
     if (findIt == actorPrototypeEnumToStringMap.end())
     {
         LOG_ERROR("Could not find actor enum: " + ToStr((int)actorProto));
@@ -258,7 +277,7 @@ std::string EnumToString_ActorPrototype(ActorPrototype actorProto)
 
 ActorPrototype StringToEnum_ActorPrototype(const std::string& actorProtoStr)
 {
-    static std::map<std::string, ActorPrototype> actorPrototypeStringToEnumMap =
+    static const MapEntry<const char*, ActorPrototype> actorPrototypeStringToEnumEntries[] =
     {
         // Actor enemies
         { "ActorPrototype_Null", ActorPrototype_Null },
@@ -496,8 +515,9 @@ ActorPrototype StringToEnum_ActorPrototype(const std::string& actorProtoStr)
         { "ActorPrototype_StaticImage", ActorPrototype_StaticImage },
         { "ActorPrototype_StaticAnimatedImage", ActorPrototype_StaticAnimatedImage },
     };
+    static std::map<std::string, ActorPrototype> actorPrototypeStringToEnumMap = MakeMap<std::string, ActorPrototype>(actorPrototypeStringToEnumEntries);
 
-    auto findIt = actorPrototypeStringToEnumMap.find(actorProtoStr);
+    std::map<std::string, ActorPrototype>::iterator findIt = actorPrototypeStringToEnumMap.find(actorProtoStr);
     if (findIt == actorPrototypeStringToEnumMap.end())
     {
         LOG_ERROR("Could not find actor enum: " + actorProtoStr);
@@ -552,7 +572,7 @@ FixtureType FixtureTypeStringToEnum(const std::string& fixtureTypeStr)
 
 DamageType StringToDamageTypeEnum(const std::string& str)
 {
-    static const std::map<std::string, DamageType> s_StringToDamageTypeEnumMap =
+    static const MapEntry<const char*, DamageType> s_StringToDamageTypeEnumEntries[] =
     {
         { "DamageType_None", DamageType_None },
         { "DamageType_MeleeAttack", DamageType_MeleeAttack },
@@ -566,8 +586,9 @@ DamageType StringToDamageTypeEnum(const std::string& str)
         { "DamageType_Trident", DamageType_Trident },
         { "DamageType_SirenProjectile", DamageType_SirenProjectile }
     };
+    static const std::map<std::string, DamageType> s_StringToDamageTypeEnumMap = MakeMap<std::string, DamageType>(s_StringToDamageTypeEnumEntries);
 
-    auto findIt = s_StringToDamageTypeEnumMap.find(str);
+    std::map<std::string, DamageType>::const_iterator findIt = s_StringToDamageTypeEnumMap.find(str);
     if (findIt == s_StringToDamageTypeEnumMap.end())
     {
         LOG_ERROR("Could not find DamageType: " + str);
@@ -602,7 +623,7 @@ b2BodyType BodyTypeStringToEnum(const std::string& bodyTypeStr)
 
 Direction StringToEnum_Direction(const std::string& dirStr)
 {
-    static const std::map<std::string, Direction> directionEnumToStringMap =
+    static const MapEntry<const char*, Direction> directionEnumToStringEntries[] =
     {
         { "Direction_None", Direction_None },
         { "Direction_Up", Direction_Up },
@@ -614,8 +635,9 @@ Direction StringToEnum_Direction(const std::string& dirStr)
         { "Direction_Up_Right", Direction_Up_Right },
         { "Direction_Down_Right", Direction_Down_Right },
     };
+    static const std::map<std::string, Direction> directionEnumToStringMap = MakeMap<std::string, Direction>(directionEnumToStringEntries);
 
-    auto findIt = directionEnumToStringMap.find(dirStr);
+    std::map<std::string, Direction>::const_iterator findIt = directionEnumToStringMap.find(dirStr);
     if (findIt == directionEnumToStringMap.end())
     {
         LOG_ERROR("Could not find Direction: " + dirStr);
@@ -627,7 +649,7 @@ Direction StringToEnum_Direction(const std::string& dirStr)
 
 std::string EnumToString_Direction(Direction dir)
 {
-    static std::map<Direction, std::string> stringToDirectionEnumMap =
+    static const MapEntry<Direction, const char*> stringToDirectionEnumEntries[] =
     {
         // Actor enemies
         { Direction_None, "Direction_None" },
@@ -640,8 +662,9 @@ std::string EnumToString_Direction(Direction dir)
         { Direction_Up_Right, "Direction_Up_Right" },
         { Direction_Down_Right, "Direction_Down_Right" },
     };
+    static std::map<Direction, std::string> stringToDirectionEnumMap = MakeMap<Direction, std::string>(stringToDirectionEnumEntries);
 
-    auto findIt = stringToDirectionEnumMap.find(dir);
+    std::map<Direction, std::string>::iterator findIt = stringToDirectionEnumMap.find(dir);
     if (findIt == stringToDirectionEnumMap.end())
     {
         LOG_ERROR("Could not find direction enum: " + ToStr((int)dir));

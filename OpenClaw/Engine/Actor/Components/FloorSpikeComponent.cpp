@@ -48,8 +48,10 @@ void FloorSpikeComponent::VPostInit()
 
     // Correct m_TimeOn and m_TimeOff time to sync spike delays
     // m_TimeOn + m_TimeOff is a full animation cycle
-    for (const auto &frame : pAnimComponent->GetCurrentAnimation()->GetAnimFrames())
+    const std::vector<AnimationFrame>& animFrames = pAnimComponent->GetCurrentAnimation()->GetAnimFrames();
+    for (size_t i = 0; i < animFrames.size(); i++)
     {
+        const AnimationFrame& frame = animFrames[i];
         m_TimeOn -= frame.duration;
         m_TimeOff -= frame.duration;
     }

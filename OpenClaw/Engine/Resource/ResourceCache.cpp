@@ -199,11 +199,11 @@ std::vector<std::string> ResourceZipArchive::GetAllFilesInDirectory(const char* 
     {
         dirPath.insert(0, "/");
     }
-    if (dirPath.back() != '/')
+    if (dirPath[dirPath.size() - 1] != '/')
     {
         dirPath += "/";
     }
-    auto findIt = m_pZipFile->m_DirToFileListMap.find(dirPath);
+    DirToFileListMap::iterator findIt = m_pZipFile->m_DirToFileListMap.find(dirPath);
     if (findIt != m_pZipFile->m_DirToFileListMap.end())
     {
         filesInDirectory.insert(filesInDirectory.end(), findIt->second.begin(), findIt->second.end());
@@ -223,6 +223,13 @@ ResourceHandle::ResourceHandle(Resource& resource, char* buffer, uint32 size, Re
     _size = size;
     _extraData = NULL;
     _resourceCache = resCache;
+}
+
+void ResourceHandle::ReleaseBuffer()
+{
+    SAFE_DELETE_ARRAY(_buffer);
+    _resourceCache->MemoryHasBeenFreed(_size);
+    _size = 0;
 }
 
 ResourceHandle::~ResourceHandle()
@@ -289,9 +296,9 @@ std::shared_ptr<ResourceHandle> ResourceCache::Load(Resource* r)
     std::shared_ptr<IResourceLoader> loader;
     std::shared_ptr<ResourceHandle> handle;
 
-    for (auto resourceLoader : _resourceLoaderList)
+    for (ResourceLoaderList::iterator resourceLoader = _resourceLoaderList.begin(); resourceLoader != _resourceLoaderList.end(); ++resourceLoader)
     {
-        std::shared_ptr<IResourceLoader> testLoader = resourceLoader;
+        std::shared_ptr<IResourceLoader> testLoader = *resourceLoader;
 
         if (WildcardMatch(testLoader->VGetPattern().c_str(), r->GetName().c_str()))
         {
@@ -427,6 +434,26 @@ void ResourceCache::Flush()
     }
 }
 
+void ResourceCache::FlushImages(const std::string& prefix)
+{
+    std::vector<std::shared_ptr<ResourceHandle> > gonners;
+    for (ResourceHandleMap::iterator it = _resourceMap.begin(); it != _resourceMap.end(); ++it)
+    {
+        const std::string& name = it->first;
+        const bool isImage = name.size() > 4 &&
+            (name.compare(name.size() - 4, 4, ".pid") == 0 || name.compare(name.size() - 4, 4, ".pcx") == 0 ||
+             name.compare(name.size() - 4, 4, ".png") == 0);
+        if (it->second && isImage && name.compare(0, prefix.size(), prefix) == 0)
+        {
+            gonners.push_back(it->second);
+        }
+    }
+    for (size_t i = 0; i < gonners.size(); i++)
+    {
+        Free(gonners[i]);
+    }
+}
+
 bool ResourceCache::MakeRoom(uint32 size)
 {
     if (size > _cacheSize)
@@ -475,6 +502,12 @@ std::vector<std::string> ResourceCache::Match(const std::string pattern)
     std::string patternCopy = pattern;
     std::transform(patternCopy.begin(), patternCopy.end(), patternCopy.begin(), (int(*)(int)) std::tolower);
 
+    std::map<std::string, std::vector<std::string> >::iterator cached = _matchCache.find(patternCopy);
+    if (cached != _matchCache.end())
+    {
+        return cached->second;
+    }
+
     uint32 numFiles = _resourceFile->VGetNumResources();
     for (uint32 fileIdx = 0; fileIdx < numFiles; ++fileIdx)
     {
@@ -490,6 +523,7 @@ std::vector<std::string> ResourceCache::Match(const std::string pattern)
         }
     }
 
+    _matchCache[patternCopy] = matchingNames;
     return matchingNames;
 }
 using namespace std;

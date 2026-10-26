@@ -1,0 +1,10 @@
+// libwap: readers for the Claw data formats (REZ, PID, ANI, WWD, PAL, XMI).
+TARGET          openclaw_libwap.lib
+TARGETTYPE      lib
+
+#include "common.mmh"
+
+USERINCLUDE     ..\compat
+USERINCLUDE     ..\..\libwap
+
+#include "libwap_sources.mmh"

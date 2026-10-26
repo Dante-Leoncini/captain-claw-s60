@@ -1,0 +1,20 @@
+// Compiler setup shared by every OpenClaw S60 target: RVCT 2.2, ARMv6 + VFPv2 (Nokia N95),
+// Open C / Open C++ (STLport v4).
+ALWAYS_BUILD_AS_ARM
+OPTION_REPLACE  ARMCC --cpu 6
+OPTION_REPLACE  ARMCC --fpu vfpv2 --fpmode fast
+OPTION_REPLACE  ARMCC -O2 -Otime
+OPTION          ARMCC --diag_suppress 68,111,174,177,186,191,550,830,940,1293,2874
+
+MACRO           SDL2LITE
+MACRO           TIXML_USE_STL
+MACRO           OPENCLAW_FRAME_PROFILE
+
+SYSTEMINCLUDE   \epoc32\include
+SYSTEMINCLUDE   \epoc32\include\stdapis
+SYSTEMINCLUDE   \epoc32\include\stdapis\stlport
+SYSTEMINCLUDE   \epoc32\include\stdapis\stlport\stl
+SYSTEMINCLUDE   \epoc32\include\mw
+SYSTEMINCLUDE   \epoc32\include\app
+SYSTEMINCLUDE   \epoc32\include\platform
+SYSTEMINCLUDE   \epoc32\include\platform\mw

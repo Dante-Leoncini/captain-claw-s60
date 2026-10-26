@@ -108,6 +108,7 @@ class AmmoComponent;
 class PowerupComponent;
 class HealthComponent;
 class FollowableComponent;
+class SceneNode;
 class ClawControllableComponent : 
     public ControllableComponent, 
     public AnimationObserver, 
@@ -198,6 +199,16 @@ private:
     PowerupComponent* m_pPowerupComponent;
     HealthComponent* m_pHealthComponent;
     FollowableComponent* m_pExclamationMark;
+
+    // Killed by an enemy: Claw jumps up and falls through the floor off the screen while the
+    // camera stays still
+    void StartFallingOffScreen();
+    void UpdateFallingOffScreen(uint32 msDiff);
+    void FinishDying();
+    bool m_bIsFallingOffScreen;
+    double m_FallOffScreenSpeed;
+    int m_FallOffScreenTimeMs;
+    shared_ptr<SceneNode> m_pCameraTargetBeforeDeath;
 };
 
 #endif

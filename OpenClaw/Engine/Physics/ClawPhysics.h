@@ -5,10 +5,11 @@
 #include "../SharedDefines.h"
 
 #include <Box2D/Box2D.h>
+#include <set>
 
 typedef std::map<uint32, b2Body*> ActorIDToBox2DBodyMap;
 typedef std::map<b2Body*, uint32> Box2DBodyToActorIDMap;
-typedef std::vector<std::pair<uint32, b2Body*>> ActorIdAndBodyList;
+typedef std::vector<std::pair<uint32, b2Body*> > ActorIdAndBodyList;
 
 class PhysicsContactListener;
 class PhysicsDebugDrawer;
@@ -79,6 +80,7 @@ private:
     uint32 FindActorId(b2Body* pBody);
     void ScheduleActorForRemoval(uint32 actorId) { m_ActorsToBeDestroyed.push_back(actorId); }
     void AddActorFixtureToBody(b2Body* pBody, const ActorFixtureDef* pFixtureDef);
+    void ParkBodiesOutsideActiveArea();
     
     unique_ptr<b2World> m_pWorld;
     unique_ptr<PhysicsDebugDrawer> m_pDebugDrawer;
@@ -88,12 +90,16 @@ private:
 
     std::vector<uint32> m_ActorsToBeDestroyed;
     std::vector<const ActorBodyDef*> m_ActorBodiesToBeCreated;
-    std::vector<std::pair<uint32, const ActorFixtureDef*>> m_FixturesToBeCreated;
-    std::vector<std::pair<uint32, const Point>> m_DeferredAppliedForce;
+    std::vector<std::pair<uint32, const ActorFixtureDef*> > m_FixturesToBeCreated;
+    std::vector<std::pair<uint32, Point> > m_DeferredAppliedForce;
     
     ActorIDToBox2DBodyMap m_ActorToBodyMap;
     Box2DBodyToActorIDMap m_BodyToActorMap;
     ActorIdAndBodyList m_ActorIdAndBodyList;
+
+    // Bodies made inactive because they are far from the camera (GlobalOptions::activeAreaMargin)
+    std::set<b2Body*> m_ParkedBodies;
+    uint32 m_UpdateCount;
 };
 
 class KinematicComponent;
@@ -203,7 +209,7 @@ public:
     virtual void VSetPosition(uint32_t actorId, const Point& position) override { }
     virtual Point VGetPosition(uint32_t actorId) override { return Point(); }
 
-    virtual SDL_Rect VGetAABB(uint32_t actorId, bool discardSensors) override  { return{ 0, 0, 0, 0 }; }
+    virtual SDL_Rect VGetAABB(uint32_t actorId, bool discardSensors) override  { SDL_Rect rect = { 0, 0, 0, 0 }; return rect; }
     virtual bool VIsActorOverlap(uint32_t actorId, FixtureType overlapType) { return false; }
 
     virtual RaycastResult VRayCast(const Point& fromPoint, const Point& toPoint, uint32 filterMask) override { return RaycastResult(); }

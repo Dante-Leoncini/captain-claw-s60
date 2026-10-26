@@ -106,8 +106,9 @@ public:
             bIsApplied = true;
         }
 
-        for (const auto& keyValuePair : m_ValueKeyToValueMap)
+        for (std::map<std::string, std::string>::const_iterator it = m_ValueKeyToValueMap.begin(); it != m_ValueKeyToValueMap.end(); ++it)
         {
+            const std::pair<const std::string, std::string>& keyValuePair = *it;
             if (!SetTiXmlNode1Attribute(pRootElem, m_XmlNodePath, keyValuePair.first, keyValuePair.second))
             {
                 LOG_ASSERT("Could not set: " + m_XmlNodePath + " to keypair: [" + keyValuePair.first + "," + keyValuePair.second + "]");
@@ -126,7 +127,8 @@ private:
     std::map<std::string, std::string> m_ValueKeyToValueMap;
 };
 
-enum class zIndexes : int32 {
+namespace zIndexes {
+enum Type {
     MinIndex = 0,
     ScorePopup = 0,
     SingleAnimation = 0,
@@ -145,6 +147,7 @@ enum class zIndexes : int32 {
     PowerupSparkle = 8000,
     MaxIndex = 9000
 };
+}
 
 namespace ActorTemplates
 {
@@ -185,7 +188,7 @@ namespace ActorTemplates
     TiXmlElement* CreateXmlData_CrateActor(const std::string &imageSet, const Point& position, const std::vector<PickupType>& loot, uint32 health, int32 zCoord);
     TiXmlElement* CreateXmlData_PowderKegActor(const std::string &imageSet, const Point& position, int32 damage, int32 zCoord);
     TiXmlElement* CreateXmlData_CrumblingPeg(const std::string &imageSet, const Point& position, int32 zCoord);
-    TiXmlElement* CreateXmlData_GlitterActor(const std::string &glitterType, const Point& position, zIndexes zCoord);
+    TiXmlElement* CreateXmlData_GlitterActor(const std::string &glitterType, const Point& position, zIndexes::Type zCoord);
     TiXmlElement* CreateXmlData_CheckpointActor(const std::string &imageSet, const Point& position, int32 zCoord, const Point& spawnPosition, bool isSaveCheckpoint, uint32 saveCheckpointNumber);
     TiXmlElement* CreateXmlData_EnemyAIActor(const std::string &imageSet, const std::string &animationSet, const Point& position, const std::vector<PickupType>& loot, const std::string &logicName, int32 zCoord, int32 minPatrolX, int32 maxPatrolX);
     
@@ -201,11 +204,11 @@ namespace ActorTemplates
     StrongActorPtr CreatePowerupSparkleActor(int cycleDuration);
     StrongActorPtr CreateClawProjectile(AmmoType ammoType, Direction direction, const Point& position, int sourceActorId, const Point& initialImpulse);
     StrongActorPtr CreateProjectile(const std::string &imageSet, uint32 damage, DamageType damageType, Direction direction, const Point& position, CollisionFlag collisionFlag, uint32 collisionMask, int sourceActorId);
-    StrongActorPtr CreateAreaDamage(const Point& position, const Point& size, int32 damage, CollisionFlag collisionFlag, const std::string& shape, DamageType damageType, Direction hitDirection, int sourceActorId, const Point& positionOffset = Point(0, 0), const std::string& imageSet = "", zIndexes zCoord = zIndexes::MinIndex);
-    StrongActorPtr CreateGlitter(const std::string& glitterType, const Point& position, zIndexes zCoord = zIndexes::Glitter);
+    StrongActorPtr CreateAreaDamage(const Point& position, const Point& size, int32 damage, CollisionFlag collisionFlag, const std::string& shape, DamageType damageType, Direction hitDirection, int sourceActorId, const Point& positionOffset = Point(0, 0), const std::string& imageSet = "", zIndexes::Type zCoord = zIndexes::MinIndex);
+    StrongActorPtr CreateGlitter(const std::string& glitterType, const Point& position, zIndexes::Type zCoord = zIndexes::Glitter);
     //StrongActorPtr CreatePopupActor(Point position, std::string imageSet, std::vector<PredefinedMove>& moves, int32 zCoord = 0);
     StrongActorPtr CreateScorePopupActor(const Point& position, int score);
-    StrongActorPtr CreateRenderedActor(const Point& position, const std::string &imageSet, const std::string& animPath, zIndexes zCoord);
+    StrongActorPtr CreateRenderedActor(const Point& position, const std::string &imageSet, const std::string& animPath, zIndexes::Type zCoord);
 
     // This represents (or atleast should represent) single animation, e.g. explosion
     StrongActorPtr CreateSingleAnimation(const Point& position, AnimationType animType);

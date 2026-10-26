@@ -12,7 +12,8 @@ static Point GetRopeEndFramePosition(const Point& initialPosition, int frameIdx)
 {
     assert(frameIdx >= 0 && frameIdx <= 119);
 
-    static std::map<int, Point> s_RopeFrameIndexToRopeHandleOffsetMap =
+    struct RopeHandleOffset { int frameIdx; Point offset; };
+    static const RopeHandleOffset s_RopeHandleOffsets[] =
     {
         { 0, Point(-175, 173) },
         { 1, Point(-174, 174) },
@@ -146,6 +147,14 @@ static Point GetRopeEndFramePosition(const Point& initialPosition, int frameIdx)
         { 118, Point(-176, 176) },
         { 119, Point(-175, 174) },
     };
+    static std::map<int, Point> s_RopeFrameIndexToRopeHandleOffsetMap;
+    if (s_RopeFrameIndexToRopeHandleOffsetMap.empty())
+    {
+        for (size_t i = 0; i < sizeof(s_RopeHandleOffsets) / sizeof(s_RopeHandleOffsets[0]); i++)
+        {
+            s_RopeFrameIndexToRopeHandleOffsetMap.insert(std::make_pair(s_RopeHandleOffsets[i].frameIdx, s_RopeHandleOffsets[i].offset));
+        }
+    }
 
     return (initialPosition + s_RopeFrameIndexToRopeHandleOffsetMap[frameIdx] + Point(2, -151));
 }

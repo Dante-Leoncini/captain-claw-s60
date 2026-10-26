@@ -242,48 +242,48 @@ bool ActorController::VOnPointerButtonUp(SDL_MouseButtonEvent& mouseEvent)
     return false;
 }
 
-std::vector<std::shared_ptr<AbstractRecognizer>> ActorController::VRegisterRecognizers() {
+std::vector<std::shared_ptr<AbstractRecognizer> > ActorController::VRegisterRecognizers() {
     const float thresholdDistance = g_pApp->GetControlOptions()->touchScreen.distanceThreshold;
     const unsigned int thresholdMs = g_pApp->GetControlOptions()->touchScreen.timeThreshold;
 
     // TODO: Try to describe it in config?
-    std::vector<std::shared_ptr<AbstractRecognizer>> recognizers{};
+    std::vector<std::shared_ptr<AbstractRecognizer> > recognizers;
     recognizers.reserve(6);
 
     // Pause button. Left up screen corner. Maximum priority
-    auto pauseRecognizer = std::make_shared<TapRecognizer>(PAUSE_TAP_RECOGNIZER, 100);
-    pauseRecognizer->SetFrame(Rect{0.0f, 0.0f, 0.1f, 0.1f});
+    std::shared_ptr<TapRecognizer> pauseRecognizer = std::make_shared<TapRecognizer>(PAUSE_TAP_RECOGNIZER, 100);
+    pauseRecognizer->SetFrame(Rect(0.0f, 0.0f, 0.1f, 0.1f));
     recognizers.push_back(pauseRecognizer);
 
     // Change weapon button. Right up screen corner. Maximum priority
-    auto weaponRecognizer = std::make_shared<TapRecognizer>(WEAPON_TAP_RECOGNIZER, 99);
-    weaponRecognizer->SetFrame(Rect{0.9f, 0.0f, 0.1f, 0.2f});
+    std::shared_ptr<TapRecognizer> weaponRecognizer = std::make_shared<TapRecognizer>(WEAPON_TAP_RECOGNIZER, 99);
+    weaponRecognizer->SetFrame(Rect(0.9f, 0.0f, 0.1f, 0.2f));
     recognizers.push_back(weaponRecognizer);
 
     // Attack button. All screen area. Minimum priority
-    auto attackRecognizer = std::make_shared<TapRecognizer>(ATTACK_TAP_RECOGNIZER, 1);
+    std::shared_ptr<TapRecognizer> attackRecognizer = std::make_shared<TapRecognizer>(ATTACK_TAP_RECOGNIZER, 1);
     recognizers.push_back(attackRecognizer);
 
     // Movement controller. Left part of screen. Medium priority
-    auto joystick = std::make_shared<JoystickRecognizer>(MOVEMENT_JOYSTICK_RECOGNIZER, 50, thresholdDistance, thresholdMs + 100);
-    joystick->SetFrame(Rect{0.0f, 0.0f, 0.5f, 1.0f});
+    std::shared_ptr<JoystickRecognizer> joystick = std::make_shared<JoystickRecognizer>(MOVEMENT_JOYSTICK_RECOGNIZER, 50, thresholdDistance, thresholdMs + 100);
+    joystick->SetFrame(Rect(0.0f, 0.0f, 0.5f, 1.0f));
     recognizers.push_back(joystick);
 
     // Jump button. Right part of screen. Minimum priority but greater that attack button
-    auto jumpButton = std::make_shared<PressRecognizer>(JUMP_PRESS_RECOGNIZER, 20, thresholdDistance, thresholdMs);
-    jumpButton->SetFrame(Rect{0.5f, 0.0f, 0.5f, 1.0f});
+    std::shared_ptr<PressRecognizer> jumpButton = std::make_shared<PressRecognizer>(JUMP_PRESS_RECOGNIZER, 20, thresholdDistance, thresholdMs);
+    jumpButton->SetFrame(Rect(0.5f, 0.0f, 0.5f, 1.0f));
     recognizers.push_back(jumpButton);
 
     // Swipe to attack. Right part of screen. Medium priority (greater than jump button)
-    auto swipe = std::make_shared<SwipeRecognizer>(PROJECTILE_SWIPE_RECOGNIZER, 51, thresholdDistance, thresholdMs);
-    swipe->SetFrame(Rect{0.5f, 0.0f, 0.5f, 1.0f});
+    std::shared_ptr<SwipeRecognizer> swipe = std::make_shared<SwipeRecognizer>(PROJECTILE_SWIPE_RECOGNIZER, 51, thresholdDistance, thresholdMs);
+    swipe->SetFrame(Rect(0.5f, 0.0f, 0.5f, 1.0f));
     recognizers.push_back(swipe);
 
     return recognizers;
 }
 
 bool ActorController::VOnTouch(const Touch_Event &evt) {
-    auto code = evt.sdlEvent.user.code;
+    Sint32 code = evt.sdlEvent.user.code;
     switch (code) {
         case TAP:
             return OnTap(evt.recognizerId, evt.customData.tap);
@@ -308,7 +308,7 @@ bool ActorController::OnTap(int id, const Touch_TapEvent &evt) {
             // Little hack to open/close ingame menu
             key = SDLK_ESCAPE;
 
-            SDL_Event event{0};
+            SDL_Event event = {0};
             event.type = SDL_KEYDOWN;
             event.key.keysym.sym = key;
             event.key.keysym.scancode = SDL_GetScancodeFromKey(key);
@@ -337,8 +337,8 @@ bool ActorController::OnTap(int id, const Touch_TapEvent &evt) {
 
 bool ActorController::OnJoystick(int id, const Touch_JoystickEvent &evt) {
     if (id == MOVEMENT_JOYSTICK_RECOGNIZER) {
-        const auto dx = evt.dx;
-        const auto dy = evt.dy;
+        const float dx = evt.dx;
+        const float dy = evt.dy;
 
         const float deadzone = 0.05 * 0.05;
 
@@ -364,7 +364,8 @@ bool ActorController::OnJoystick(int id, const Touch_JoystickEvent &evt) {
         }
 
         SDL_Keycode keys[] = {SDLK_LEFT, SDLK_UP, SDLK_RIGHT, SDLK_DOWN};
-        for (SDL_Keycode key : keys) {
+        for (size_t keyIdx = 0; keyIdx < sizeof(keys) / sizeof(keys[0]); keyIdx++) {
+            SDL_Keycode key = keys[keyIdx];
             bool isPressed = m_InputKeys[key];
             bool press = key == horizontalKey || key == verticalKey;
             if (!isPressed && press) {

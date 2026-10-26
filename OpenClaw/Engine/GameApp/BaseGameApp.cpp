@@ -21,6 +21,7 @@
 #include "../Resource/Loaders/PngLoader.h"
 
 #include "BaseGameApp.h"
+#include "../Graphics2D/MoviePlayer.h"
 
 #include <cctype>
 
@@ -48,6 +49,7 @@ BaseGameApp::BaseGameApp()
     m_pAudio = NULL;
     m_pConsoleFont = NULL;
     m_pTouchManager = nullptr;
+    m_pMoviePlayer = NULL;
     m_IsRunning = false;
     m_QuitRequested = false;
     m_IsQuitting = false;
@@ -80,7 +82,10 @@ bool BaseGameApp::Initialize(int argc, char** argv)
 
     m_pResourceMgr->VPreload("/CLAW/*", NULL, ORIGINAL_RESOURCE);
     m_pResourceMgr->VPreload("/GAME/*", NULL, ORIGINAL_RESOURCE);
-    m_pResourceMgr->VPreload("/STATES/*", NULL, ORIGINAL_RESOURCE);
+    if (m_GameOptions.preloadResources)
+    {
+        m_pResourceMgr->VPreload("/STATES/*", NULL, ORIGINAL_RESOURCE);
+    }
 
     m_pResourceMgr->VPreload("*", NULL, CUSTOM_RESOURCE);
 
@@ -91,6 +96,15 @@ bool BaseGameApp::Initialize(int argc, char** argv)
     }
 
     m_IsRunning = true;
+
+    if (m_GameOptions.playIntroMovies)
+    {
+        // Monolith logo and the introduction
+        std::vector<int> introMovies;
+        introMovies.push_back(0);
+        introMovies.push_back(1);
+        PlayMovies(introMovies);
+    }
 
     return true;
 }
@@ -106,6 +120,7 @@ void BaseGameApp::Terminate()
     SDL_DestroyWindow(m_pWindow);
     SAFE_DELETE(m_pAudio);
     SAFE_DELETE(m_pTouchManager);
+    SAFE_DELETE(m_pMoviePlayer);
     SAFE_DELETE(m_pEventMgr);
     SAFE_DELETE(m_pResourceMgr);
     if (m_pConsoleFont) {
@@ -113,8 +128,8 @@ void BaseGameApp::Terminate()
         m_pConsoleFont = nullptr;
     }
 
-    for (auto &actorProto : m_ActorXmlPrototypeMap) {
-        delete actorProto.second;
+    for (ActorXmlPrototypeMap::iterator actorProto = m_ActorXmlPrototypeMap.begin(); actorProto != m_ActorXmlPrototypeMap.end(); ++actorProto) {
+        delete actorProto->second;
     }
     m_ActorXmlPrototypeMap.clear();
 
@@ -185,6 +200,65 @@ bool BaseGameApp::VPerformStartupTests()
     return bTestsOk;
 }
 
+#ifdef SDL2LITE
+extern "C" void sdl2lite_on_key(SDL_Scancode scancode, SDL_Keycode sym, int down, int repeat);
+
+// Remote tests on phones: with autoplay.txt in the user directory Claw plays by himself in the
+// level (runs right, jumps and attacks; shoots instead when the file says "fire"), so hitches
+// and crashes can be found with nobody at the phone
+static void StepAutoPlay(const std::string& userDirectory, uint32 msDiff)
+{
+    static int enabled = -1;
+    static uint32 time = 0;
+    static SDL_Scancode attackScancode = SDL_SCANCODE_LCTRL;
+    static SDL_Keycode attackKey = SDLK_LCTRL;
+    if (enabled < 0)
+    {
+        FILE* pFile = fopen((userDirectory + "autoplay.txt").c_str(), "r");
+        enabled = pFile ? 1 : 0;
+        if (pFile)
+        {
+            char mode[16] = "";
+            if (fgets(mode, sizeof(mode), pFile) && strncmp(mode, "fire", 4) == 0)
+            {
+                attackScancode = SDL_SCANCODE_LALT;
+                attackKey = SDLK_LALT;
+            }
+            fclose(pFile);
+            LOG("Autoplay on");
+        }
+    }
+    if (!enabled)
+    {
+        return;
+    }
+
+    const uint32 before = time;
+    time += msDiff;
+    if (before == 0)
+    {
+        sdl2lite_on_key(SDL_SCANCODE_RIGHT, SDLK_RIGHT, 1, 0);
+    }
+    // jump every 1.6 s (held 0.3 s), attack every 2.3 s
+    if (before % 1600 > time % 1600)
+    {
+        sdl2lite_on_key(SDL_SCANCODE_SPACE, SDLK_SPACE, 1, 0);
+    }
+    if (before % 1600 < 300 && time % 1600 >= 300)
+    {
+        sdl2lite_on_key(SDL_SCANCODE_SPACE, SDLK_SPACE, 0, 0);
+    }
+    if (before % 2300 > time % 2300)
+    {
+        sdl2lite_on_key(attackScancode, attackKey, 1, 0);
+    }
+    if (before % 2300 < 100 && time % 2300 >= 100)
+    {
+        sdl2lite_on_key(attackScancode, attackKey, 0, 0);
+    }
+}
+#endif
+
 void BaseGameApp::StepLoop() {
     static uint32 lastTime = SDL_GetTicks();
     SDL_Event event;
@@ -212,6 +286,12 @@ void BaseGameApp::StepLoop() {
         }
         consecutiveLagSpikes = 0;
 
+        if (!m_MovieQueue.empty() || (m_pMoviePlayer && m_pMoviePlayer->IsPlaying()))
+        {
+            StepMovies(elapsedTime);
+            return;
+        }
+
         // Handle all input events
         while (SDL_PollEvent(&event))
         {
@@ -228,19 +308,43 @@ void BaseGameApp::StepLoop() {
 
         if (m_pGame)
         {
-            // Update game
+            // Update game in steps of at most 50 ms: one long frame on a slow device would make the
+            // physics tunnel and the actors overshoot. Slower frames slow the game down instead of
+            // running more steps (each step costs a full update, which made slow frames slower).
             {
                 //PROFILE_CPU("ONLY GAME UPDATE");
-                IEventMgr::Get()->VUpdate(20); // Allow event queue to process for up to 20 ms
-                m_pGame->VOnUpdate(elapsedTime);
+                const uint32 maxStepMs = 50;
+                const int maxSteps = 1;
+                static double gameTimeLeftover = 0.0;
+                double gameTime = elapsedTime * m_GlobalOptions.gameSpeed + gameTimeLeftover;
+                uint32 remainingMs = (uint32)gameTime;
+                gameTimeLeftover = gameTime - remainingMs;
+                for (int step = 0; step < maxSteps && (remainingMs > 0 || step == 0); step++)
+                {
+                    uint32 stepMs = remainingMs < maxStepMs ? remainingMs : maxStepMs;
+                    remainingMs -= stepMs;
+                    {
+                        PROFILE_FRAME_SECTION(FrameSection_Events);
+                        IEventMgr::Get()->VUpdate(20); // Allow event queue to process for up to 20 ms
+                    }
+                    m_pGame->VOnUpdate(stepMs);
+#ifdef SDL2LITE
+                    if (m_pGame->GetGameState() == GameState_IngameRunning && m_pGame->GetClawActor())
+                    {
+                        StepAutoPlay(m_GameOptions.userDirectory, stepMs);
+                    }
+#endif
+                }
             }
 
             // Render game
-            for (auto &pGameView : m_pGame->m_GameViews)
+            for (GameViewList::iterator pGameView = m_pGame->m_GameViews.begin(); pGameView != m_pGame->m_GameViews.end(); ++pGameView)
             {
                 //PROFILE_CPU("ONLY RENDER");
-                pGameView->VOnRender(elapsedTime);
+                PROFILE_FRAME_SECTION(FrameSection_Render);
+                (*pGameView)->VOnRender(elapsedTime);
             }
+            PROFILE_FRAME_END();
             
             //m_pGame->VRenderDiagnostics();
         }
@@ -250,8 +354,60 @@ void BaseGameApp::StepLoop() {
     }
 }
 
+void BaseGameApp::PlayMovies(const std::vector<int>& movieIndices)
+{
+    m_MovieQueue.insert(m_MovieQueue.end(), movieIndices.begin(), movieIndices.end());
+}
+
+void BaseGameApp::StepMovies(uint32 elapsedTime)
+{
+    if (!m_pMoviePlayer)
+    {
+        m_pMoviePlayer = new MoviePlayer();
+    }
+
+    SDL_Event event;
+    while (SDL_PollEvent(&event))
+    {
+        if (event.type == SDL_QUIT || event.type == SDL_APP_TERMINATING)
+        {
+            m_IsRunning = false;
+            m_MovieQueue.clear();
+            m_pMoviePlayer->Close();
+            return;
+        }
+        if (event.type == SDL_KEYDOWN && !event.key.repeat)
+        {
+            m_pMoviePlayer->Close();
+        }
+    }
+
+    while (!m_pMoviePlayer->IsPlaying() && !m_MovieQueue.empty())
+    {
+        int movieIndex = m_MovieQueue.front();
+        m_MovieQueue.erase(m_MovieQueue.begin());
+        m_pMoviePlayer->Open(m_GameOptions.userDirectory + m_GameOptions.moviesArchive, movieIndex, m_pRenderer);
+        elapsedTime = 0;
+    }
+
+    m_pMoviePlayer->Update(elapsedTime);
+
+    // Movies are drawn 1:1 on the window
+    Point gameScale = GetScale();
+    SetScale(Point(1.0, 1.0));
+    SDL_SetRenderDrawColor(m_pRenderer, 0, 0, 0, 255);
+    SDL_RenderClear(m_pRenderer);
+    m_pMoviePlayer->Render(m_pRenderer, m_WindowSize.x, m_WindowSize.y);
+    {
+        PROFILE_FRAME_SECTION(FrameSection_Present);
+        SDL_RenderPresent(m_pRenderer);
+    }
+    SetScale(gameScale);
+    PROFILE_FRAME_END();
+}
+
 void Loop(void *instance) {
-    auto self = static_cast<BaseGameApp*>(instance);
+    BaseGameApp* self = static_cast<BaseGameApp*>(instance);
     self->StepLoop();
 #ifdef __EMSCRIPTEN__
     if (!self->m_IsRunning) {
@@ -374,6 +530,19 @@ void BaseGameApp::OnEvent(SDL_Event& event)
 void BaseGameApp::OnDisplayChange(int newWidth, int newHeight)
 {
     LOG("Display changed. New Width-Height: " + ToStr(newWidth) + "-" + ToStr(newHeight));
+
+    // The screen rotated or the window was resized: same scale, bigger or smaller view
+    m_WindowSize.Set(newWidth, newHeight);
+    m_GameOptions.windowWidth = newWidth;
+    m_GameOptions.windowHeight = newHeight;
+    if (m_pGame)
+    {
+        HumanView* pHumanView = GetHumanView();
+        if (pHumanView && pHumanView->GetCamera())
+        {
+            pHumanView->GetCamera()->SetSize(newWidth, newHeight);
+        }
+    }
 }
 
 void BaseGameApp::VOnRestore()
@@ -425,11 +594,11 @@ void BaseGameApp::SetWindowSize(int width, int height, double scale)
 HumanView* BaseGameApp::GetHumanView() const
 {
     HumanView *pView = NULL;
-    for (auto &view : m_pGame->m_GameViews)
+    for (GameViewList::iterator view = m_pGame->m_GameViews.begin(); view != m_pGame->m_GameViews.end(); ++view)
     {
-        if (view->VGetType() == GameView_Human)
+        if ((*view)->VGetType() == GameView_Human)
         {
-            pView = static_cast<HumanView *>(view.get());
+            pView = static_cast<HumanView *>((*view).get());
             break;
         }
     }
@@ -469,6 +638,8 @@ bool BaseGameApp::LoadGameOptions(const char* inConfigFile)
 
         ParseValueFromXmlElem(&m_GameOptions.scale,
             displayElem->FirstChildElement("Scale"));
+        ParseValueFromXmlElem(&m_GameOptions.hudScale,
+            displayElem->FirstChildElement("HUDScale"));
         ParseValueFromXmlElem(&m_GameOptions.useVerticalSync,
             displayElem->FirstChildElement("UseVerticalSync"));
         ParseValueFromXmlElem(&m_GameOptions.isFullscreen,
@@ -559,8 +730,14 @@ bool BaseGameApp::LoadGameOptions(const char* inConfigFile)
             assetsElem->FirstChildElement("RezArchive")));
         DO_AND_CHECK(ParseValueFromXmlElem(&m_GameOptions.customArchive,
             assetsElem->FirstChildElement("CustomArchive")));
+        ParseValueFromXmlElem(&m_GameOptions.moviesArchive,
+            assetsElem->FirstChildElement("MoviesArchive"));
+        ParseValueFromXmlElem(&m_GameOptions.playIntroMovies,
+            assetsElem->FirstChildElement("PlayIntroMovies"));
         DO_AND_CHECK(ParseValueFromXmlElem(&m_GameOptions.resourceCacheSize,
             assetsElem->FirstChildElement("ResourceCacheSize")));
+        ParseValueFromXmlElem(&m_GameOptions.preloadResources,
+            assetsElem->FirstChildElement("PreloadResources"));
         ParseValueFromXmlElem(&m_GameOptions.tempDir,
             assetsElem->FirstChildElement("TempDir"));
         DO_AND_CHECK(ParseValueFromXmlElem(&m_GameOptions.savesFile,
@@ -688,6 +865,12 @@ bool BaseGameApp::LoadGameOptions(const char* inConfigFile)
             pGlobalOptionsRootElem->FirstChildElement("ShowFps"));
         ParseValueFromXmlElem(&m_GlobalOptions.showPosition,
             pGlobalOptionsRootElem->FirstChildElement("ShowPosition"));
+        ParseValueFromXmlElem(&m_GlobalOptions.activeAreaMargin,
+            pGlobalOptionsRootElem->FirstChildElement("ActiveAreaMargin"));
+        ParseValueFromXmlElem(&m_GlobalOptions.gameSpeed,
+            pGlobalOptionsRootElem->FirstChildElement("GameSpeed"));
+        ParseValueFromXmlElem(&m_GlobalOptions.gameSavedMessage,
+            pGlobalOptionsRootElem->FirstChildElement("GameSavedMessage"));
     }
 
     //-------------------------------------------------------------------------
@@ -860,7 +1043,7 @@ bool BaseGameApp::InitializeResources(GameOptions& gameOptions)
     std::string rezArchivePath = gameOptions.assetsFolder + gameOptions.rezArchive;
 
     IResourceFile* rezArchive = new ResourceRezArchive(rezArchivePath);
-    std::shared_ptr<ResourceCache> m_pResourceCache { new ResourceCache(gameOptions.resourceCacheSize, rezArchive, ORIGINAL_RESOURCE) };
+    std::shared_ptr<ResourceCache> m_pResourceCache(new ResourceCache(gameOptions.resourceCacheSize, rezArchive, ORIGINAL_RESOURCE));
     if (!m_pResourceCache->Init())
     {
         LOG_ERROR("Failed to initialize resource cachce from resource file: " + std::string(rezArchivePath));
@@ -880,7 +1063,7 @@ bool BaseGameApp::InitializeResources(GameOptions& gameOptions)
     std::string customArchivePath = gameOptions.assetsFolder + gameOptions.customArchive;
 
     IResourceFile* pCustomArchive = new ResourceZipArchive(customArchivePath);
-    std::shared_ptr<ResourceCache> pCustomCache{ new ResourceCache(50, pCustomArchive, CUSTOM_RESOURCE) };
+    std::shared_ptr<ResourceCache> pCustomCache(new ResourceCache(50, pCustomArchive, CUSTOM_RESOURCE));
     if (!pCustomCache->Init())
     {
         LOG_ERROR("Failed to initialize resource cachce from resource file: " + customArchivePath);
@@ -937,11 +1120,11 @@ bool BaseGameApp::InitializeLocalization(GameOptions& gameOptions)
 
 bool BaseGameApp::InitializeTouchManager(GameOptions& gameOptions)
 {
-    auto& touchScreenConfig = GetControlOptions()->touchScreen;
-    if (touchScreenConfig.enable) {
+    const ControlOptions* pControlOptions = GetControlOptions();
+    if (pControlOptions->touchScreen.enable) {
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, ">>>>> Initializing touch resolver...");
 
-        m_pTouchManager = new TouchManager{};
+        m_pTouchManager = new TouchManager();
 
         LOG("Touch resolver successfully initialized...");
     }
@@ -968,8 +1151,9 @@ bool BaseGameApp::ReadActorXmlPrototypes(GameOptions& gameOptions)
 
     std::vector<std::string> xmlActorPrototypeFiles = m_pResourceMgr->VMatch("/ACTOR_PROTOTYPES/*.XML");
 
-    for (const std::string& protoFile : xmlActorPrototypeFiles)
+    for (size_t protoFileIdx = 0; protoFileIdx < xmlActorPrototypeFiles.size(); protoFileIdx++)
     {
+        const std::string& protoFile = xmlActorPrototypeFiles[protoFileIdx];
         TiXmlElement* pActorProtoElem = XmlResourceLoader::LoadAndReturnRootXmlElement(protoFile.c_str());
         std::string protoName;
         if (!ParseAttributeFromXmlElem(&protoName, "ActorPrototypeName", pActorProtoElem))
@@ -987,7 +1171,7 @@ bool BaseGameApp::ReadActorXmlPrototypes(GameOptions& gameOptions)
             TiXmlElement* pActorProtoElemDuplicate = pDuplicateNode->ToElement();
             assert(pActorProtoElemDuplicate);
 
-            auto iter = m_ActorXmlPrototypeMap.insert(std::make_pair(actorProto, pActorProtoElemDuplicate));
+            std::pair<ActorXmlPrototypeMap::iterator, bool> iter = m_ActorXmlPrototypeMap.insert(std::make_pair(actorProto, pActorProtoElemDuplicate));
             if (!iter.second) {
                 LOG_WARNING("Multi " + EnumToString_ActorPrototype(actorProto) + " actor prototype definitions! Fix ASSETS!");
                 std::string typeName;
@@ -1006,7 +1190,7 @@ bool BaseGameApp::ReadActorXmlPrototypes(GameOptions& gameOptions)
         actorPrototypeIdx < ActorPrototype_Max;
         actorPrototypeIdx++)
     {
-        auto findIt = m_ActorXmlPrototypeMap.find(ActorPrototype(actorPrototypeIdx));
+        ActorXmlPrototypeMap::iterator findIt = m_ActorXmlPrototypeMap.find(ActorPrototype(actorPrototypeIdx));
         if (findIt == m_ActorXmlPrototypeMap.end())
         {
             LOG_ERROR("Actor prototype: \"" + 
@@ -1040,8 +1224,9 @@ bool BaseGameApp::ReadLevelMetadata(GameOptions& gameOptions)
     }
 
     std::vector<std::string> xmlLevelMetadataFiles = m_pResourceMgr->VMatch(LEVEL_METADATA_ARCHIVE_FOLDER + "/*.XML");
-    for (const std::string& metadataFile : xmlLevelMetadataFiles)
+    for (size_t metadataFileIdx = 0; metadataFileIdx < xmlLevelMetadataFiles.size(); metadataFileIdx++)
     {
+        const std::string& metadataFile = xmlLevelMetadataFiles[metadataFileIdx];
         TiXmlElement* pRootElem = XmlResourceLoader::LoadAndReturnRootXmlElement(metadataFile.c_str());
         if (pRootElem == NULL)
         {
@@ -1203,7 +1388,7 @@ bool BaseGameApp::ReadLevelMetadata(GameOptions& gameOptions)
 
 const shared_ptr<LevelMetadata> BaseGameApp::GetLevelMetadata(int levelNumber) const
 {
-    auto findIt = m_LevelMetadataMap.find(levelNumber);
+    LevelMetadataMap::const_iterator findIt = m_LevelMetadataMap.find(levelNumber);
     if (findIt == m_LevelMetadataMap.end())
     {
         LOG_ASSERT("LevelMetadata not found for level: " + ToStr(levelNumber));
@@ -1239,6 +1424,16 @@ Point BaseGameApp::GetScale()
     scale.Set((double)scaleX, (double)scaleY);
 
     return scale;
+}
+
+Point BaseGameApp::BeginHUDScale()
+{
+    Point previousScale = GetScale();
+    if (m_GameOptions.hudScale > 0.0)
+    {
+        SetScale(Point(m_GameOptions.hudScale, m_GameOptions.hudScale));
+    }
+    return previousScale;
 }
 
 void BaseGameApp::SetScale(Point scale)
@@ -1354,7 +1549,7 @@ private:
 // Remark: Caller is getting a NEW copy of the prototype -> caller is responsible for freeing this copy !
 TiXmlElement* BaseGameApp::GetActorPrototypeElem(ActorPrototype proto)
 {
-    auto findIt = m_ActorXmlPrototypeMap.find(proto);
+    ActorXmlPrototypeMap::iterator findIt = m_ActorXmlPrototypeMap.find(proto);
     if (findIt == m_ActorXmlPrototypeMap.end())
     {
         LOG_ERROR("Failed to find ActorPrototype: " + ToStr((int)proto));
@@ -1402,18 +1597,28 @@ void BaseGameApp::RegisterAllDelegates()
 {
     IEventMgr::Get()->VAddListener(MakeDelegate(
         this, &BaseGameApp::QuitGameDelegate), EventData_Quit_Game::sk_EventType);
+    IEventMgr::Get()->VAddListener(MakeDelegate(
+        this, &BaseGameApp::PlayMovieDelegate), EventData_Menu_Play_Movie::sk_EventType);
 }
 
 void BaseGameApp::RemoveAllDelegates()
 {
     IEventMgr::Get()->VRemoveListener(MakeDelegate(
         this, &BaseGameApp::QuitGameDelegate), EventData_Quit_Game::sk_EventType);
+    IEventMgr::Get()->VRemoveListener(MakeDelegate(
+        this, &BaseGameApp::PlayMovieDelegate), EventData_Menu_Play_Movie::sk_EventType);
 }
 
 void BaseGameApp::QuitGameDelegate(IEventDataPtr pEventData)
 {
-    Terminate();
-    exit(0);
+    // The main loop ends and the host shuts the game down (Run() terminates it)
+    m_IsRunning = false;
+}
+
+void BaseGameApp::PlayMovieDelegate(IEventDataPtr pEventData)
+{
+    shared_ptr<EventData_Menu_Play_Movie> pCastEventData = static_pointer_cast<EventData_Menu_Play_Movie>(pEventData);
+    PlayMovies(std::vector<int>(1, pCastEventData->GetMovieIndex()));
 }
 
 //=====================================================================================================================

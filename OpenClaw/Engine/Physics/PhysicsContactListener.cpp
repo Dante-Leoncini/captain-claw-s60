@@ -1,4 +1,4 @@
-#include <cstdint>
+#include <stdint.h>
 #include "PhysicsContactListener.h"
 #include "ClawPhysics.h"
 #include "../SharedDefines.h"
@@ -401,7 +401,7 @@ void PhysicsContactListener::BeginContact(b2Contact* pContact)
         SWAP_IF_FIXTURE_B_EQUALS(pFixtureA, pFixtureB, FixtureType_Trigger_GabrielButton);
         SWAP_IF_FIXTURE_B_EQUALS(pFixtureA, pFixtureB, FixtureType_Trigger_ChaseEnemyAreaSensor);
         SWAP_IF_FIXTURE_B_EQUALS(pFixtureA, pFixtureB, FixtureType_Trigger_RollAreaSensor);
-        FixtureType fixtureType = FixtureType(reinterpret_cast<std::intptr_t>(pFixtureA->GetUserData()));
+        FixtureType fixtureType = FixtureType(reinterpret_cast<intptr_t>(pFixtureA->GetUserData()));
         if (IsTriggerFixture(fixtureType))
         {
             if (pFixtureB->GetBody()->GetUserData() != NULL)
@@ -685,7 +685,7 @@ void PhysicsContactListener::EndContact(b2Contact* pContact)
         SWAP_IF_FIXTURE_B_EQUALS(pFixtureA, pFixtureB, FixtureType_Trigger_GabrielButton);
         SWAP_IF_FIXTURE_B_EQUALS(pFixtureA, pFixtureB, FixtureType_Trigger_ChaseEnemyAreaSensor);
         SWAP_IF_FIXTURE_B_EQUALS(pFixtureA, pFixtureB, FixtureType_Trigger_RollAreaSensor);
-        FixtureType fixtureType = FixtureType(reinterpret_cast<std::intptr_t>(pFixtureA->GetUserData()));
+        FixtureType fixtureType = FixtureType(reinterpret_cast<intptr_t>(pFixtureA->GetUserData()));
         if (IsTriggerFixture(fixtureType))
         {
             if (pFixtureB->GetBody()->GetUserData() != NULL)

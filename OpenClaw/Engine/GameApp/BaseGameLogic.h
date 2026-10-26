@@ -26,6 +26,9 @@ public:
 
     bool Initialize();
 
+    // Part of the level that is simulated (see GlobalOptions::activeAreaMargin)
+    bool IsInActiveArea(const Point& position) const;
+
     /*// IGameLogic interface
     virtual WeakActorPtr VGetActorPtr(const uint32 actorId);
     virtual StrongActorPtr VCreateActor(const std::string& xmlActorResource, TiXmlElement* overrides);
@@ -110,7 +113,11 @@ protected:
     void IngameMenuEndLifeDelegate(IEventDataPtr pEventData);
     void WorldFinishedLoadingDelegate(IEventDataPtr pEventData);
 
+    void UpdateActiveArea();
+
     uint32 m_Lifetime;
+    bool m_bActiveAreaEnabled;
+    SDL_Rect m_ActiveArea;
     ProcessMgr* m_pProcessMgr;
     ActorMap m_ActorMap;
     uint32 m_LastActorId;

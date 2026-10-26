@@ -20,8 +20,9 @@ bool ConveyorBeltComponent::VInit(TiXmlElement* pData)
 
 void ConveyorBeltComponent::VUpdate(uint32 msDiff)
 {
-    for (Actor* pStandingActor : m_StandingActorsList)
+    for (size_t i = 0; i < m_StandingActorsList.size(); i++)
     {
+        Actor* pStandingActor = m_StandingActorsList[i];
         PhysicsComponent* pPhysicsComponent = pStandingActor->GetRawComponent<PhysicsComponent>(true);
         Point extSpeed(m_Speed, 0);
 
@@ -36,7 +37,7 @@ void ConveyorBeltComponent::OnActorBeginContact(Actor* pActor)
 
 void ConveyorBeltComponent::OnActorEndContact(Actor* pActor)
 {
-    for (auto actorIter = m_StandingActorsList.begin(); actorIter != m_StandingActorsList.end(); ++actorIter)
+    for (ActorList::iterator actorIter = m_StandingActorsList.begin(); actorIter != m_StandingActorsList.end(); ++actorIter)
     {
         if (pActor == (*actorIter))
         {

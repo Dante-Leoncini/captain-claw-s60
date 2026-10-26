@@ -26,6 +26,8 @@
 #include "GameSaves.h"
 
 #include "../Physics/ClawPhysics.h"
+#include "../Resource/Loaders/PidLoader.h"
+#include "../Resource/ResourceMgr.h"
 
 #include <algorithm>
 #include <fstream>
@@ -41,6 +43,7 @@
 BaseGameLogic::BaseGameLogic()
 {
     m_Lifetime = 0;
+    m_bActiveAreaEnabled = false;
     m_pProcessMgr = NULL;
     m_LastActorId = 0;
     m_GameState = GameState_Initializing;
@@ -70,9 +73,9 @@ BaseGameLogic::~BaseGameLogic()
     SAFE_DELETE(m_pActorFactory);
 
     // Destroy all actors
-    for (auto &actorIter : m_ActorMap)
+    for (ActorMap::iterator actorIter = m_ActorMap.begin(); actorIter != m_ActorMap.end(); ++actorIter)
     {
-        actorIter.second->Destroy();
+        actorIter->second->Destroy();
     }
     m_ActorMap.clear();
 
@@ -131,11 +134,11 @@ bool BaseGameLogic::VEnterMenu(const char* xmlMenuResource)
         return false;
     }
 
-    for (auto pGameView : m_GameViews)
+    for (GameViewList::iterator pGameView = m_GameViews.begin(); pGameView != m_GameViews.end(); ++pGameView)
     {
-        if (pGameView->VGetType() == GameView_Human)
+        if ((*pGameView)->VGetType() == GameView_Human)
         {
-            shared_ptr<HumanView> pHumanView = static_pointer_cast<HumanView>(pGameView);
+            shared_ptr<HumanView> pHumanView = static_pointer_cast<HumanView>(*pGameView);
             if (!pHumanView->EnterMenu(pXmlLevelRoot))
             {
                 return false;
@@ -146,6 +149,8 @@ bool BaseGameLogic::VEnterMenu(const char* xmlMenuResource)
     return true;
 }
 
+static void DrawLoadingScreen(shared_ptr<Image> pBackground, SDL_Rect& renderRect, Point& scale, float progress);
+
 void RenderLoadingScreen(shared_ptr<Image> pBackground, SDL_Rect& renderRect, Point& scale, float progress)
 {
     // While we are at it, eat incoming events
@@ -155,6 +160,37 @@ void RenderLoadingScreen(shared_ptr<Image> pBackground, SDL_Rect& renderRect, Po
         g_pApp->OnEvent(evt);
     }
 
+    DrawLoadingScreen(pBackground, renderRect, scale, progress);
+    Util::RenderForcePresent(g_pApp->GetRenderer());
+}
+
+struct LoadingScreenFrame
+{
+    shared_ptr<Image> pBackground;
+    SDL_Rect renderRect;
+    Point scale;
+    float progress;
+};
+
+static void DrawLoadingScreenFrame(void* pUserData)
+{
+    LoadingScreenFrame* pFrame = static_cast<LoadingScreenFrame*>(pUserData);
+    DrawLoadingScreen(pFrame->pBackground, pFrame->renderRect, pFrame->scale, pFrame->progress);
+}
+
+// The loading screen comes out of black and goes back to it, as in the original game
+static void FadeLoadingScreen(shared_ptr<Image> pBackground, SDL_Rect& renderRect, Point& scale, float progress, bool fadeIn)
+{
+    LoadingScreenFrame frame;
+    frame.pBackground = pBackground;
+    frame.renderRect = renderRect;
+    frame.scale = scale;
+    frame.progress = progress;
+    Util::FadeScreen(&DrawLoadingScreenFrame, &frame, fadeIn ? 255 : 0, fadeIn ? 0 : 255, 400);
+}
+
+static void DrawLoadingScreen(shared_ptr<Image> pBackground, SDL_Rect& renderRect, Point& scale, float progress)
+{
     SDL_Renderer* pRenderer = g_pApp->GetRenderer();
     SDL_RenderClear(pRenderer);
 
@@ -175,14 +211,62 @@ void RenderLoadingScreen(shared_ptr<Image> pBackground, SDL_Rect& renderRect, Po
     SDL_RenderCopy(pRenderer, pTotalProgressBar, NULL, &totalProgressBarRect);
     SDL_RenderCopy(pRenderer, pRemainingProgressBar, NULL, &remainingProgressBarRect);
 
-    Util::RenderForcePresent(pRenderer);
-
     SDL_DestroyTexture(pTotalProgressBar);
     SDL_DestroyTexture(pRemainingProgressBar);
 }
 
+// Images of what appears during play (score popups, loot, glitter, explosions, hits, HUD digits): loaded with
+// the level and kept, so the first coin or the first explosion doesn't stall the game loading them
+static std::vector<shared_ptr<Image> > s_GameplayImages;
+
+static void LoadGameplayImages(WapPal* pPalette)
+{
+    static const char* const directories[] =
+    {
+        "/GAME/IMAGES/POINTS", "/GAME/IMAGES/TREASURE", "/GAME/IMAGES/GLITTER", "/GAME/IMAGES/GREENGLITTER",
+        "/GAME/IMAGES/GLITTERRED", "/GAME/IMAGES/WARPGLITTER", "/GAME/IMAGES/EXPLOS", "/GAME/IMAGES/DYNAMITEEXPLO",
+        "/GAME/IMAGES/DYNAMITELIT", "/GAME/IMAGES/DYNAMITE", "/GAME/IMAGES/PROJECTILES", "/GAME/IMAGES/BULLETS",
+        "/GAME/IMAGES/ENEMYHIT", "/GAME/IMAGES/CLAWHIT", "/GAME/IMAGES/SPARKLE", "/GAME/IMAGES/SPARKLE2",
+        "/GAME/IMAGES/RICOCHET", "/GAME/IMAGES/MAGIC", "/GAME/IMAGES/MAGICCLAW", "/GAME/IMAGES/HEALTH",
+        "/GAME/IMAGES/AMMO", "/GAME/IMAGES/CATNIPS", "/GAME/IMAGES/POWERUPS", "/GAME/IMAGES/EXCLAMATION",
+        "/GAME/IMAGES/CHECKPOINTFLAG", "/GAME/IMAGES/SUPERCHECKPOINT", "/GAME/IMAGES/LIGHTFX",
+        // HUD digits: a new score or health shows digits nobody else keeps alive
+        "/GAME/IMAGES/INTERFACE/SCORENUMBERS", "/GAME/IMAGES/INTERFACE/HEALTHNUMBERS",
+        "/GAME/IMAGES/INTERFACE/SMALLNUMBERS", "/GAME/IMAGES/INTERFACE/STOPWATCH", "/GAME/IMAGES/INTERFACE/WEAPONS",
+        "/GAME/IMAGES/INTERFACE/POWERUPS"
+    };
+
+    s_GameplayImages.clear();
+    for (size_t dirIdx = 0; dirIdx < sizeof(directories) / sizeof(directories[0]); dirIdx++)
+    {
+        std::vector<std::string> files = g_pApp->GetResourceCache()->GetAllFilesInDirectory(directories[dirIdx]);
+        for (size_t fileIdx = 0; fileIdx < files.size(); fileIdx++)
+        {
+            if (!WildcardMatch("*.pid", files[fileIdx].c_str()))
+            {
+                continue;
+            }
+            if (shared_ptr<Image> pImage = PidResourceLoader::LoadAndReturnImage(files[fileIdx].c_str(), pPalette))
+            {
+                s_GameplayImages.push_back(pImage);
+            }
+        }
+    }
+}
+
 bool BaseGameLogic::VLoadGame(const char* xmlLevelResource)
 {
+    s_GameplayImages.clear();
+
+    // The menu and the previous level are gone: their images (and textures) go with them, and so do
+    // the pictures of OpenClaw's own archive (credits, touch controls), loaded again if ever shown
+    g_pApp->GetResourceCache()->FlushImages("/states/");
+    g_pApp->GetResourceCache()->FlushImages("/level");
+    if (shared_ptr<ResourceCache> pCustomCache = g_pApp->GetResourceMgr()->VGetResourceCacheFromName(CUSTOM_RESOURCE))
+    {
+        pCustomCache->FlushImages("");
+    }
+
     PROFILE_CPU("GAME LOADING");
     PROFILE_MEMORY("GAME LOADING");
 
@@ -197,6 +281,9 @@ bool BaseGameLogic::VLoadGame(const char* xmlLevelResource)
     // Preload level resources
     std::string levelPath = "/LEVEL" + ToStr(m_pCurrentLevel->GetLevelNumber()) + "/*";
     g_pApp->GetResourceCache()->Preload(levelPath, NULL);
+#ifdef OPENCLAW_FRAME_PROFILE
+    LOG("[load] level resources preloaded");
+#endif
 
     // ============== LOADING SCREEN RENDERING ==============
 
@@ -212,7 +299,7 @@ bool BaseGameLogic::VLoadGame(const char* xmlLevelResource)
     assert(pBackgroundImage != nullptr);
     assert(pBackgroundImage->GetTexture() != NULL);
 
-    RenderLoadingScreen(pBackgroundImage, backgroundRect, scale, loadingProgress);
+    FadeLoadingScreen(pBackgroundImage, backgroundRect, scale, loadingProgress, true);
 
     // ============== LEVEL LOADING ==============
 
@@ -220,6 +307,9 @@ bool BaseGameLogic::VLoadGame(const char* xmlLevelResource)
     assert(pWwd != NULL);
 
     TiXmlElement* pXmlLevelRoot = WwdToXml(pWwd, m_pCurrentLevel->GetLevelNumber());
+#ifdef OPENCLAW_FRAME_PROFILE
+    LOG("[load] level converted to xml");
+#endif
     if (pXmlLevelRoot == NULL)
     {
         LOG_ERROR("Could not load level resource file: " + std::string(xmlLevelResource));
@@ -318,10 +408,14 @@ bool BaseGameLogic::VLoadGame(const char* xmlLevelResource)
     g_pApp->SetCurrentPalette(PalResourceLoader::LoadAndReturnPal(palettePath.c_str()));
 
     uint32 clawId = -1;
+    // Each actor's XML is released once the actor exists: on big levels the whole tree is
+    // tens of megabytes, which is too much for phones
+    TiXmlElement* pNextActorElem = NULL;
     for (TiXmlElement* pActorElem = pXmlLevelRoot->FirstChildElement("Actor"); 
         pActorElem != NULL;
-        pActorElem = pActorElem->NextSiblingElement("Actor"))
+        pActorElem = pNextActorElem)
     {
+        pNextActorElem = pActorElem->NextSiblingElement("Actor");
         //LOG("Creating actor: " + std::string(pActorElem->Attribute("Type")));
         //if (std::string(pActorElem->Attribute("Type")) != "Plane") break;
         StrongActorPtr pActor = VCreateActor(pActorElem, NULL);
@@ -342,6 +436,8 @@ bool BaseGameLogic::VLoadGame(const char* xmlLevelResource)
             return false;
         }
 
+        pXmlLevelRoot->RemoveChild(pActorElem);
+
         loadingProgress += actorToPercent;
         if ((loadingProgress - lastProgress) > 1.0f)
         {
@@ -349,6 +445,28 @@ bool BaseGameLogic::VLoadGame(const char* xmlLevelResource)
             lastProgress = loadingProgress;
         }
     }
+
+#ifdef OPENCLAW_FRAME_PROFILE
+    LOG("[load] actors created");
+    ActorFactory::LogCreationProfile();
+#endif
+
+    LoadGameplayImages(g_pApp->GetCurrentPalette());
+#ifdef OPENCLAW_FRAME_PROFILE
+    LOG("[load] gameplay images: " + ToStr((int)s_GameplayImages.size()));
+#endif
+
+    // Loading the level pushed sounds and music out of the cache (the images took the room, which
+    // they gave back once on the GPU): read them again now, not at the first coin or death
+    const std::string levelDir = "/LEVEL" + ToStr(m_pCurrentLevel->m_LeveNumber);
+    g_pApp->GetResourceCache()->Preload("/CLAW/SOUNDS/*", NULL);
+    g_pApp->GetResourceCache()->Preload("/GAME/SOUNDS/*", NULL);
+    g_pApp->GetResourceCache()->Preload("/GAME/MUSIC/*", NULL);
+    g_pApp->GetResourceCache()->Preload(levelDir + "/SOUNDS/*", NULL);
+    g_pApp->GetResourceCache()->Preload(levelDir + "/MUSIC/*", NULL);
+#ifdef OPENCLAW_FRAME_PROFILE
+    LOG("[load] sounds preloaded");
+#endif
 
     // Load game save data
     const CheckpointSave* pCheckpointSave = m_pGameSaveMgr->GetCheckpointSave(
@@ -372,10 +490,10 @@ bool BaseGameLogic::VLoadGame(const char* xmlLevelResource)
     pEventMgr->VTriggerEvent(IEventDataPtr(new EventData_Teleport_Actor(clawId, m_CurrentSpawnPosition)));
 
     // Save possible pickup items
-    for (auto &actorIter : m_ActorMap)
+    for (ActorMap::iterator actorIter = m_ActorMap.begin(); actorIter != m_ActorMap.end(); ++actorIter)
     {
         shared_ptr<TreasurePickupComponent> pTreasurePickupComponent =
-            MakeStrongPtr(actorIter.second->GetComponent<TreasurePickupComponent>());
+            MakeStrongPtr(actorIter->second->GetComponent<TreasurePickupComponent>());
         if (pTreasurePickupComponent != nullptr)
         {
             PickupType treasurePickupType = pTreasurePickupComponent->GetPickupType();
@@ -385,12 +503,13 @@ bool BaseGameLogic::VLoadGame(const char* xmlLevelResource)
         }
 
         shared_ptr<LootComponent> pLootComponent =
-            MakeStrongPtr(actorIter.second->GetComponent<LootComponent>());
+            MakeStrongPtr(actorIter->second->GetComponent<LootComponent>());
         if (pLootComponent)
         {
             const std::vector<PickupType>* pLootList = pLootComponent->GetLoot();
-            for (PickupType pickup : (*pLootList))
+            for (size_t pickupIdx = 0; pickupIdx < (*pLootList).size(); pickupIdx++)
             {
+                PickupType pickup = (*pLootList)[pickupIdx];
                 assert(pickup != PickupType_None);
 
                 m_pCurrentLevel->m_TotalPickupsMap[pickup]++;
@@ -399,17 +518,17 @@ bool BaseGameLogic::VLoadGame(const char* xmlLevelResource)
     }
 
     // Notify all human views
-    for (auto pGameView : m_GameViews)
+    for (GameViewList::iterator pGameView = m_GameViews.begin(); pGameView != m_GameViews.end(); ++pGameView)
     {
-        if (pGameView->VGetType() == GameView_Human)
+        if ((*pGameView)->VGetType() == GameView_Human)
         {
-            shared_ptr<HumanView> pHumanView = static_pointer_cast<HumanView>(pGameView);
+            shared_ptr<HumanView> pHumanView = static_pointer_cast<HumanView>(*pGameView);
             pHumanView->LoadGame(pXmlLevelRoot, m_pCurrentLevel.get());
         }
     }
 
-    loadingProgress = 100.0f;   
-    RenderLoadingScreen(pBackgroundImage, backgroundRect, scale, loadingProgress);
+    loadingProgress = 100.0f;
+    FadeLoadingScreen(pBackgroundImage, backgroundRect, scale, loadingProgress, false);
 
     LOG("Level loaded !");
     LOG("Level name: " + m_pCurrentLevel->m_LevelName);
@@ -471,10 +590,10 @@ bool BaseGameLogic::VLoadScoreScreen(const char* xmlScoreScreenResource)
     StrongActorPtr pClaw = GetClawActor();
     assert(pClaw != nullptr);
 
-    auto pScoreComponent = MakeStrongPtr(pClaw->GetComponent<ScoreComponent>(ScoreComponent::g_Name));
-    auto pHealthComponent = MakeStrongPtr(pClaw->GetComponent<HealthComponent>(HealthComponent::g_Name));
-    auto pLifeComponent = MakeStrongPtr(pClaw->GetComponent<LifeComponent>(LifeComponent::g_Name));
-    auto pAmmoComponent = MakeStrongPtr(pClaw->GetComponent<AmmoComponent>(AmmoComponent::g_Name));
+    shared_ptr<ScoreComponent> pScoreComponent = MakeStrongPtr(pClaw->GetComponent<ScoreComponent>(ScoreComponent::g_Name));
+    shared_ptr<HealthComponent> pHealthComponent = MakeStrongPtr(pClaw->GetComponent<HealthComponent>(HealthComponent::g_Name));
+    shared_ptr<LifeComponent> pLifeComponent = MakeStrongPtr(pClaw->GetComponent<LifeComponent>(LifeComponent::g_Name));
+    shared_ptr<AmmoComponent> pAmmoComponent = MakeStrongPtr(pClaw->GetComponent<AmmoComponent>(AmmoComponent::g_Name));
     assert(pScoreComponent);
     assert(pHealthComponent);
     assert(pLifeComponent);
@@ -701,7 +820,7 @@ void BaseGameLogic::VDestroyActor(const uint32 actorId)
 {
     // Trigger actor destroyed event prior removing it here
 
-    auto findIter = m_ActorMap.find(actorId);
+    ActorMap::iterator findIter = m_ActorMap.find(actorId);
     if (findIter != m_ActorMap.end())
     {
         //LOG("Destroying: " + ToStr(actorId));
@@ -712,7 +831,7 @@ void BaseGameLogic::VDestroyActor(const uint32 actorId)
 
 WeakActorPtr BaseGameLogic::VGetActor(const uint32 actorId)
 {
-    auto findIter = m_ActorMap.find(actorId);
+    ActorMap::iterator findIter = m_ActorMap.find(actorId);
     if (findIter != m_ActorMap.end())
     {
         return findIter->second;
@@ -725,11 +844,50 @@ void BaseGameLogic::VModifyActor(const uint32 actorId, TiXmlElement* overrides)
 {
     assert(m_pActorFactory);
 
-    auto findIter = m_ActorMap.begin();
+    ActorMap::iterator findIter = m_ActorMap.begin();
     if (findIter != m_ActorMap.end())
     {
         m_pActorFactory->ModifyActor(findIter->second, overrides);
     }
+}
+
+void BaseGameLogic::UpdateActiveArea()
+{
+    m_bActiveAreaEnabled = false;
+    const int margin = g_pApp->GetGlobalOptions()->activeAreaMargin;
+    if (margin <= 0)
+    {
+        return;
+    }
+
+    for (GameViewList::iterator pGameView = m_GameViews.begin(); pGameView != m_GameViews.end(); ++pGameView)
+    {
+        if ((*pGameView)->VGetType() == GameView_Human)
+        {
+            shared_ptr<CameraNode> pCamera = static_cast<HumanView*>((*pGameView).get())->GetCamera();
+            if (pCamera)
+            {
+                SDL_Rect cameraRect = pCamera->GetCameraRect();
+                m_ActiveArea.x = cameraRect.x - margin;
+                m_ActiveArea.y = cameraRect.y - margin;
+                m_ActiveArea.w = cameraRect.w + margin * 2;
+                m_ActiveArea.h = cameraRect.h + margin * 2;
+                m_bActiveAreaEnabled = true;
+            }
+            break;
+        }
+    }
+}
+
+bool BaseGameLogic::IsInActiveArea(const Point& position) const
+{
+    if (!m_bActiveAreaEnabled)
+    {
+        return true;
+    }
+
+    return position.x >= m_ActiveArea.x && position.x < m_ActiveArea.x + m_ActiveArea.w &&
+        position.y >= m_ActiveArea.y && position.y < m_ActiveArea.y + m_ActiveArea.h;
 }
 
 void BaseGameLogic::VOnUpdate(uint32 msDiff)
@@ -739,9 +897,9 @@ void BaseGameLogic::VOnUpdate(uint32 msDiff)
     // TODO: This is code duplication, should think of better way
     if (!m_bRunning)
     {
-        for (auto &pGameView : m_GameViews)
+        for (GameViewList::iterator pGameView = m_GameViews.begin(); pGameView != m_GameViews.end(); ++pGameView)
         {
-            pGameView->VOnUpdate(msDiff);
+            (*pGameView)->VOnUpdate(msDiff);
         }
 
         return;
@@ -780,6 +938,21 @@ void BaseGameLogic::VOnUpdate(uint32 msDiff)
         case GameState_LoadingLevel:
         {
             VChangeState(GameState_IngameRunning);
+
+            // The level data places Claw and the objects a few pixels above the ground: let them
+            // land before the first frame is shown, like the original game, where everything starts
+            // standing in place
+            for (int settleStep = 0; settleStep < 10; settleStep++)
+            {
+                IEventMgr::Get()->VUpdate(IEventMgr::kINFINITE);
+                VOnUpdate(16);
+            }
+
+            // Then the level unrolls out of black, as a still picture, before the game starts
+            if (HumanView* pHumanView = g_pApp->GetHumanView())
+            {
+                pHumanView->PlayLevelStartReveal();
+            }
             break;
         }
 
@@ -796,8 +969,11 @@ void BaseGameLogic::VOnUpdate(uint32 msDiff)
 
         case GameState_IngameRunning:
         {
+            UpdateActiveArea();
+
             if (m_pProcessMgr)
             {
+                PROFILE_FRAME_SECTION(FrameSection_Processes);
                 m_pProcessMgr->UpdateProcesses(msDiff);
             }
             
@@ -807,7 +983,11 @@ void BaseGameLogic::VOnUpdate(uint32 msDiff)
                 // TODO: Add config to choose between fixed physics timestep and variable
                 if (true)
                 {
-                    m_pPhysics->VOnUpdate(msDiff);
+                    {
+                        PROFILE_FRAME_SECTION(FrameSection_PhysicsStep);
+                        m_pPhysics->VOnUpdate(msDiff);
+                    }
+                    PROFILE_FRAME_SECTION(FrameSection_PhysicsSync);
                     m_pPhysics->VSyncVisibleScene();
                 }
                 else
@@ -840,9 +1020,12 @@ void BaseGameLogic::VOnUpdate(uint32 msDiff)
     }
 
     // Update all game views
-    for (auto &pGameView : m_GameViews)
     {
-        pGameView->VOnUpdate(msDiff);
+        PROFILE_FRAME_SECTION(FrameSection_Views);
+        for (GameViewList::iterator pGameView = m_GameViews.begin(); pGameView != m_GameViews.end(); ++pGameView)
+        {
+            (*pGameView)->VOnUpdate(msDiff);
+        }
     }
 
     // Limit update to max 100 times / second
@@ -851,9 +1034,18 @@ void BaseGameLogic::VOnUpdate(uint32 msDiff)
     if (msAccumulation >= 5)
     {
         // Update all game actors
-        for (auto &actorIter : m_ActorMap)
+        PROFILE_FRAME_SECTION(FrameSection_Actors);
+        for (ActorMap::iterator actorIter = m_ActorMap.begin(); actorIter != m_ActorMap.end(); ++actorIter)
         {
-            actorIter.second->Update(msAccumulation);
+            if (m_bActiveAreaEnabled)
+            {
+                shared_ptr<PositionComponent> pPositionComponent = actorIter->second->GetPositionComponent();
+                if (pPositionComponent && !IsInActiveArea(pPositionComponent->GetPosition()))
+                {
+                    continue;
+                }
+            }
+            actorIter->second->Update(msAccumulation);
         }
         msAccumulation = 0;
     }
@@ -968,18 +1160,22 @@ void BaseGameLogic::RequestNewActorDelegate(IEventDataPtr pEventData)
 
 }
 
-std::map<CollisionType, FixtureType> g_CollisionToFixtureTypeMap =
+static std::map<CollisionType, FixtureType> CreateCollisionToFixtureTypeMap()
 {
-    { CollisionType_None, FixtureType_None },
-    { CollisionType_Solid, FixtureType_Solid },
-    { CollisionType_Ground, FixtureType_Ground },
-    { CollisionType_Climb, FixtureType_Climb },
-    { CollisionType_Death, FixtureType_Death }
-};
+    std::map<CollisionType, FixtureType> collisionToFixtureTypeMap;
+    collisionToFixtureTypeMap[CollisionType_None] = FixtureType_None;
+    collisionToFixtureTypeMap[CollisionType_Solid] = FixtureType_Solid;
+    collisionToFixtureTypeMap[CollisionType_Ground] = FixtureType_Ground;
+    collisionToFixtureTypeMap[CollisionType_Climb] = FixtureType_Climb;
+    collisionToFixtureTypeMap[CollisionType_Death] = FixtureType_Death;
+    return collisionToFixtureTypeMap;
+}
+
+std::map<CollisionType, FixtureType> g_CollisionToFixtureTypeMap = CreateCollisionToFixtureTypeMap();
 
 static FixtureType CollisonToFixtureType(CollisionType collisionType)
 {
-    auto findIt = g_CollisionToFixtureTypeMap.find(collisionType);
+    std::map<CollisionType, FixtureType>::iterator findIt = g_CollisionToFixtureTypeMap.find(collisionType);
     assert(findIt != g_CollisionToFixtureTypeMap.end());
 
     return findIt->second;
@@ -988,17 +1184,17 @@ static FixtureType CollisonToFixtureType(CollisionType collisionType)
 // Helper function
 void BaseGameLogic::CreateSinglePhysicsTile(int x, int y, const TileCollisionPrototype& proto)
 {
-    for (const auto &tileCollisionRect : proto.collisionRectangles)
+    for (std::vector<TileCollisionRectangle>::const_iterator tileCollisionRect = proto.collisionRectangles.begin(); tileCollisionRect != proto.collisionRectangles.end(); ++tileCollisionRect)
     {
-        Point position = Point(x + tileCollisionRect.collisionRect.x,
-            y + tileCollisionRect.collisionRect.y);
-        Point size = Point(tileCollisionRect.collisionRect.w, tileCollisionRect.collisionRect.h);
+        Point position = Point(x + tileCollisionRect->collisionRect.x,
+            y + tileCollisionRect->collisionRect.y);
+        Point size = Point(tileCollisionRect->collisionRect.w, tileCollisionRect->collisionRect.h);
 
         m_pPhysics->VAddStaticGeometry(
             position, 
             size, 
-            tileCollisionRect.collisionType, 
-            CollisonToFixtureType(tileCollisionRect.collisionType));
+            tileCollisionRect->collisionType, 
+            CollisonToFixtureType(tileCollisionRect->collisionType));
     }
 
     Point topLadderOffset;
@@ -1025,7 +1221,7 @@ void BaseGameLogic::CollideableTileCreatedDelegate(IEventDataPtr pEventData)
     int numTiles = pCastEventData->GetTilesCount();
     assert(numTiles >= 1);
 
-    auto findIt = m_pCurrentLevel->m_TileCollisionPrototypeMap.find(tileId);
+    TileCollisionPrototypeMap::iterator findIt = m_pCurrentLevel->m_TileCollisionPrototypeMap.find(tileId);
     if (findIt == m_pCurrentLevel->m_TileCollisionPrototypeMap.end())
     {
         LOG_ERROR("Unknown tile! Id = " + ToStr(tileId));
@@ -1052,8 +1248,9 @@ void BaseGameLogic::CollideableTileCreatedDelegate(IEventDataPtr pEventData)
 
         int countAttrTiles = 0;
         TileCollisionRectangle mergedRect;
-        for (const TileCollisionRectangle& colRect : tileProto.collisionRectangles)
+        for (size_t colRectIdx = 0; colRectIdx < tileProto.collisionRectangles.size(); colRectIdx++)
         {
+            const TileCollisionRectangle& colRect = tileProto.collisionRectangles[colRectIdx];
             if (colRect.collisionType != CollisionType_None)
             {
                 countAttrTiles++;
@@ -1124,7 +1321,7 @@ void BaseGameLogic::ActorEnteredBossAreaDelegate(IEventDataPtr pEventData)
     shared_ptr<EventData_Entered_Boss_Area> pCastEventData =
         static_pointer_cast<EventData_Entered_Boss_Area>(pEventData);
 
-    auto findIt = m_ActorMap.find(pCastEventData->GetControllerId());
+    ActorMap::iterator findIt = m_ActorMap.find(pCastEventData->GetControllerId());
     assert(findIt != m_ActorMap.end());
 
     StrongActorPtr pClaw = findIt->second;
@@ -1141,7 +1338,7 @@ void BaseGameLogic::BossFightStartedDelegate(IEventDataPtr pEventData)
     shared_ptr<EventData_Boss_Fight_Started> pCastEventData =
         static_pointer_cast<EventData_Boss_Fight_Started>(pEventData);
 
-    auto findIt = m_ActorMap.find(pCastEventData->GetControllerId());
+    ActorMap::iterator findIt = m_ActorMap.find(pCastEventData->GetControllerId());
     assert(findIt != m_ActorMap.end());
 
     StrongActorPtr pClaw = findIt->second;
@@ -1166,9 +1363,9 @@ void BaseGameLogic::IngameMenuEndLifeDelegate(IEventDataPtr pEventData)
 
 void BaseGameLogic::WorldFinishedLoadingDelegate(IEventDataPtr pEventData)
 {
-    for (const auto& actorPair : m_ActorMap)
+    for (ActorMap::iterator actorPair = m_ActorMap.begin(); actorPair != m_ActorMap.end(); ++actorPair)
     {
-        actorPair.second->OnWorldFinishedLoading();
+        actorPair->second->OnWorldFinishedLoading();
     }
 }
 
@@ -1179,12 +1376,12 @@ StrongActorPtr BaseGameLogic::GetClawActor()
         return claw;
     }
 
-    for (auto &actorIter : m_ActorMap)
+    for (ActorMap::iterator actorIter = m_ActorMap.begin(); actorIter != m_ActorMap.end(); ++actorIter)
     {
-        if (actorIter.second->GetName() == "Claw")
+        if (actorIter->second->GetName() == "Claw")
         {
-            m_pClawActor = actorIter.second;
-            return actorIter.second;
+            m_pClawActor = actorIter->second;
+            return actorIter->second;
         }
     }
 
@@ -1194,15 +1391,15 @@ StrongActorPtr BaseGameLogic::GetClawActor()
 StrongActorPtr BaseGameLogic::FindActorByName(const std::string& name, bool bIsUnique)
 {
     StrongActorPtr pFoundActor = nullptr;
-    for (auto &actorIter : m_ActorMap)
+    for (ActorMap::iterator actorIter = m_ActorMap.begin(); actorIter != m_ActorMap.end(); ++actorIter)
     {
-        if (actorIter.second->GetName() == name)
+        if (actorIter->second->GetName() == name)
         {
             if (pFoundActor != nullptr && bIsUnique)
             {
                 LOG_ASSERT("Actor with name: \"" + name + "\" was marked as unique but occured more than once !");
             }
-            pFoundActor = actorIter.second;
+            pFoundActor = actorIter->second;
         }
     }
 
@@ -1213,11 +1410,11 @@ ActorList BaseGameLogic::FindActorByName(const std::string& name)
 {
     ActorList actorList;
 
-    for (auto &actorIter : m_ActorMap)
+    for (ActorMap::iterator actorIter = m_ActorMap.begin(); actorIter != m_ActorMap.end(); ++actorIter)
     {
-        if (actorIter.second->GetName() == name)
+        if (actorIter->second->GetName() == name)
         {
-            actorList.push_back(actorIter.second.get());
+            actorList.push_back(actorIter->second.get());
         }
     }
 
@@ -1229,6 +1426,8 @@ void BaseGameLogic::UnloadLevel()
     // We cannot do this inside event update loop
     assert(IEventMgr::Get()->VIsUpdating() == false);
 
+    LOG("Unloading level: " + ToStr((int)m_ActorMap.size()) + " actors");
+
     // Handle all pending events before reset
     IEventMgr::Get()->VUpdate(IEventMgr::kINFINITE);
 
@@ -1236,14 +1435,16 @@ void BaseGameLogic::UnloadLevel()
     // will arise
     ActorMap actorMapCopy = m_ActorMap;
 
-    for (const auto &actor : actorMapCopy)
+    for (ActorMap::iterator actor = actorMapCopy.begin(); actor != actorMapCopy.end(); ++actor)
     {
-        shared_ptr<EventData_Destroy_Actor> pEvent(new EventData_Destroy_Actor(actor.second->GetGUID()));
+        shared_ptr<EventData_Destroy_Actor> pEvent(new EventData_Destroy_Actor(actor->second->GetGUID()));
         IEventMgr::Get()->VTriggerEvent(pEvent);
     }
 
     // These events have to ensure that the map will be in fact empty
     assert(m_ActorMap.empty());
+
+    LOG("Actors destroyed");
 
     // Process any pending events which could have arose from deleting all actors
     IEventMgr::Get()->VUpdate(IEventMgr::kINFINITE);
@@ -1251,6 +1452,7 @@ void BaseGameLogic::UnloadLevel()
     //m_pCurrentLevel.reset();
 
     m_pPhysics.reset();
+    LOG("Level unloaded");
 }
 
 void BaseGameLogic::VResetLevel()
@@ -1258,9 +1460,9 @@ void BaseGameLogic::VResetLevel()
     // Handle all pending events before reset
     IEventMgr::Get()->VUpdate(IEventMgr::kINFINITE);
 
-    for (auto &actorIter : m_ActorMap)
+    for (ActorMap::iterator actorIter = m_ActorMap.begin(); actorIter != m_ActorMap.end(); ++actorIter)
     {
-        shared_ptr<EventData_Destroy_Actor> pEvent(new EventData_Destroy_Actor(actorIter.second->GetGUID()));
+        shared_ptr<EventData_Destroy_Actor> pEvent(new EventData_Destroy_Actor(actorIter->second->GetGUID()));
         IEventMgr::Get()->VTriggerEvent(pEvent);
     }
 
@@ -1311,7 +1513,7 @@ void BaseGameLogic::RemoveAllDelegates()
 
 void BaseGameLogic::ExecuteStartupCommands(const std::string& startupCommandsFile)
 {
-    std::ifstream commandsFile(startupCommandsFile);
+    std::ifstream commandsFile(startupCommandsFile.c_str());
     if (commandsFile.is_open())
     {
         std::string line;

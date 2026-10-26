@@ -144,7 +144,7 @@ void DestroyableComponent::VOnHealthBelowZero(DamageType damageType, int sourceA
     if (!m_PossibleDestructionSounds.empty())
     {
         // Pick random death sound
-        srand((long)this + (long)&m_PossibleDestructionSounds);
+        srand((long)(size_t)this + (long)(size_t)&m_PossibleDestructionSounds);
         int soundToPlayIdx = rand() % m_PossibleDestructionSounds.size();
 
         // And play it

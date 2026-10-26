@@ -1,5 +1,5 @@
 #include <stdexcept>
-#include "IO.h"
+#include "WapStream.h"
 #include "Util.h"
 
 char* StdStringToCharArray(std::string source)

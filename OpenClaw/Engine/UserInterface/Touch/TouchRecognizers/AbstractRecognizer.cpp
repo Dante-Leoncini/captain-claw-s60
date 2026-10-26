@@ -14,21 +14,21 @@ bool AbstractRecognizer::isTouchWithinFrame(float x, float y) {
            y > frame.y && y < frame.y + frame.h;
 }
 
-RecognizerState AbstractRecognizer::OnFingerDown(const SDL_TouchFingerEvent &evt) {
+RecognizerState::Type AbstractRecognizer::OnFingerDown(const SDL_TouchFingerEvent &evt) {
     if (IsEnabled() && isTouchWithinFrame(evt.x, evt.y)) {
         return VOnFingerDown(evt);
     }
     return RecognizerState::DoNothing;
 }
 
-RecognizerState AbstractRecognizer::OnFingerMotion(const SDL_TouchFingerEvent &evt) {
+RecognizerState::Type AbstractRecognizer::OnFingerMotion(const SDL_TouchFingerEvent &evt) {
     if (IsEnabled()) {
         return VOnFingerMotion(evt);
     }
     return RecognizerState::Failed;
 }
 
-RecognizerState AbstractRecognizer::OnFingerUp(const SDL_TouchFingerEvent &evt) {
+RecognizerState::Type AbstractRecognizer::OnFingerUp(const SDL_TouchFingerEvent &evt) {
     if (IsEnabled()) {
         return VOnFingerUp(evt);
     }

@@ -1,0 +1,10 @@
+// OpenClaw (Captain Claw) for S60 3rd Edition: RVCT 2.2, ARMV5 (the N95 build in Carbide)
+
+PRJ_PLATFORMS
+DEFAULT
+
+PRJ_MMPFILES
+gnumakefile icon.mk
+libwap.mmp
+openclaw_game.mmp
+OpenClaw.mmp

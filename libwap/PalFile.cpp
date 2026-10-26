@@ -2,7 +2,7 @@
 #include <stdint.h>
 
 #include "libwap.h"
-#include "IO.h"
+#include "WapStream.h"
 
 WapPal* WAP_PalLoadFromData(char* data, size_t size)
 {
@@ -21,9 +21,9 @@ WapPal* WAP_PalLoadFromData(char* data, size_t size)
     // Read whole palette, there is no header
     for (i = 0; i < WAP_PALETTE_SIZE_BYTES / 3; i++)
     {
-        palFileStream.read(wapPal->colors[i].r,
-            wapPal->colors[i].g,
-            wapPal->colors[i].b);
+        palFileStream.read(wapPal->colors[i].r);
+        palFileStream.read(wapPal->colors[i].g);
+        palFileStream.read(wapPal->colors[i].b);
 
         // First pixel in palette is transparent
         if (i == 0)
@@ -54,7 +54,7 @@ WapPal* WAP_PalLoadFromFile(const char* palFilePath)
         return NULL;
     }
 
-    return WAP_PalLoadFromData(palFileContents.data(), palFileContents.size());
+    return WAP_PalLoadFromData((palFileContents.empty() ? NULL : &palFileContents[0]), palFileContents.size());
 }
 
 WapPal* WAP_PalLoadFromRezFile(RezFile* rezFile)

@@ -156,7 +156,7 @@ private:
 // AmmoPickupComponent
 //=====================================================================================================================
 
-typedef std::vector<std::pair<AmmoType, int>> AmmoList;
+typedef std::vector<std::pair<AmmoType, int> > AmmoList;
 
 class AmmoPickupComponent : public PickupComponent
 {

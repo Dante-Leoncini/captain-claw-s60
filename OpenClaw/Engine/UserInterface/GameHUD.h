@@ -11,7 +11,7 @@ const uint32 AMMO_NUMBERS_COUNT = 2;
 const uint32 LIVES_NUMBERS_COUNT = 1;
 const uint32 STOPWATCH_NUMBERS_COUNT = 3;
 
-typedef std::map<std::string, shared_ptr<SDL2HUDSceneNode>> HUDElementsMap;
+typedef std::map<std::string, shared_ptr<SDL2HUDSceneNode> > HUDElementsMap;
 
 class Image;
 class CameraNode;
@@ -48,9 +48,13 @@ public:
 
     void UpdateFPS(uint32 newFPS);
 
+    // Centered message written with the game font (/GAME/IMAGES/FONT), e.g. "GAME SAVED"
+    void ShowMessage(const std::string& text, uint32 durationMs);
+
 private:
     void BossHealthChangedDelegate(IEventDataPtr pEvent);
     void BossFightEndedDelegate(IEventDataPtr pEvent);
+    void CheckpointReachedDelegate(IEventDataPtr pEvent);
 
     void UpdateCameraPosition();
 
@@ -69,6 +73,9 @@ private:
     SDL_Texture* m_pFPSTexture;
     SDL_Texture* m_pPositionTexture;
     SDL_Texture* m_pBossBarTexture;
+
+    std::vector<shared_ptr<Image> > m_MessageGlyphs;
+    int m_MessageTimeLeft;
 };
 
 #endif

@@ -44,7 +44,7 @@
     <ClInclude Include="libwap.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="IO.h">
+    <ClInclude Include="WapStream.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Miniz.h">

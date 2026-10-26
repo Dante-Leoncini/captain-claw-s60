@@ -10,6 +10,14 @@
 
 ClawGameApp testApp;
 
+#ifdef __SYMBIAN32__
+// The S60 front-end has its own entry point; referencing this keeps the game in the image
+extern "C" void* OpenClawGameApp()
+{
+    return &testApp;
+}
+#endif
+
 int main(int argc, char* argv[]);
 
 #ifdef ANDROID
@@ -35,6 +43,7 @@ extern "C" void Java_org_libsdl_app_SDLActivity_nativeInit( \
 }
 #endif //ANDROID
 
+#ifndef __SYMBIAN32__
 int main(int argc, char* argv[])
 {
 #ifdef _CRTDBG_MAP_ALLOC
@@ -48,3 +57,6 @@ int main(int argc, char* argv[])
 #endif
     return RunGameEngine(argc, argv);
 }
+#endif
+
+

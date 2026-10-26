@@ -40,6 +40,7 @@ PhysicsComponent::PhysicsComponent() :
     m_pPhysics(nullptr),
     m_pTopLadderContact(NULL),
     m_pMovingPlatformContact(NULL),
+
     m_bClampToGround(false),
     m_DoNothingTimeout(0),
     m_bIsForcedUp(false),
@@ -213,8 +214,9 @@ void PhysicsComponent::VPostInit()
 
             //LOG("-------- X: " + ToStr(pImage->GetOffsetX()) + " Y: " + ToStr(pImage->GetOffsetY()));
 
-            for (ActorFixtureDef fixture : m_ActorBodyDef.fixtureList)
+            for (size_t i = 0; i < m_ActorBodyDef.fixtureList.size(); i++)
             {
+                ActorFixtureDef fixture = m_ActorBodyDef.fixtureList[i];
                 if (fixture.size.IsZero())
                 {
                     fixture.size = Point(pImage->GetWidth(), pImage->GetHeight());
@@ -243,7 +245,7 @@ void PhysicsComponent::VPostPostInit()
 {
     if (m_bClampToGround)
     {
-        auto pPositionComponent = m_pOwner->GetPositionComponent();
+        shared_ptr<PositionComponent> pPositionComponent = m_pOwner->GetPositionComponent();
         // Position enemy to the floor
         Point fromPoint = pPositionComponent->GetPosition();
         Point toPoint = pPositionComponent->GetPosition() + Point(0, 100);
@@ -284,6 +286,37 @@ TiXmlElement* PhysicsComponent::VGenerateXml()
 // since I dont know how to properly implement character control system. I really am aware that this
 // horrible state machine is pretty far from being acceptable. Given time this should be refactored.
 //
+bool PhysicsComponent::AreFeetAtLadderTop()
+{
+    // (a ladder is made of one piece per tile: its end is the top of the highest one)
+    if (m_OverlappingLaddersList.empty())
+    {
+        return false;
+    }
+    double ladderTop = MetersToPixels(m_OverlappingLaddersList[0]->GetAABB(0).lowerBound).y;
+    for (size_t i = 1; i < m_OverlappingLaddersList.size(); i++)
+    {
+        ladderTop = std::min(ladderTop, (double)MetersToPixels(m_OverlappingLaddersList[i]->GetAABB(0).lowerBound).y);
+    }
+    const SDL_Rect body = m_pPhysics->VGetAABB(m_pOwner->GetGUID(), true);
+    return body.y + body.h <= ladderTop + 1;
+}
+
+void PhysicsComponent::SnapToFloor()
+{
+    // Puts the feet right on the floor under them
+    const SDL_Rect body = m_pPhysics->VGetAABB(m_pOwner->GetGUID(), true);
+    const double feetY = body.y + body.h;
+    const Point rayStart(body.x + body.w / 2, feetY - 2);
+    RaycastResult floor = m_pPhysics->VRayCast(rayStart, rayStart + Point(0, 48), CollisionFlag_Solid | CollisionFlag_Ground);
+    if (floor.foundIntersection)
+    {
+        // (a pixel above: one-way platforms only hold what is over them)
+        m_pPhysics->VTranslate(m_pOwner->GetGUID(), Point(0, rayStart.y + floor.closestPixelDistance - feetY - 1));
+        m_pPhysics->VSetLinearSpeedEx(m_pOwner->GetGUID(), Point(0, 0));
+    }
+}
+
 void PhysicsComponent::VUpdate(uint32 msDiff)
 {
     // Just move this to ClawControllerComponent update......................
@@ -512,6 +545,26 @@ void PhysicsComponent::VUpdate(uint32 msDiff)
 
                 bool bIsOnTopLadder = CheckOverlap(FixtureType_TopLadderGround);
                 bool bIsClimbingUp = m_ClimbingSpeed.y < (-1.0 * DBL_EPSILON);
+
+                // Feet up to the ladder's end: he gets off and stands on the floor there (the original
+                // game), instead of climbing on through the air
+                if (bIsClimbingUp && bIsOnTopLadder && AreFeetAtLadderTop())
+                {
+                    if (m_pTopLadderContact != NULL)
+                    {
+                        m_pTopLadderContact->SetEnabled(true);
+                    }
+                    m_IsClimbing = false;
+                    m_IgnoreJump = false;
+                    m_ClimbingSpeed = Point(0, 0);
+                    m_CurrentSpeed = Point(0, 0);
+                    m_pPhysics->VSetLinearSpeedEx(m_pOwner->GetGUID(), Point(0, 0));
+                    m_pPhysics->VSetGravityScale(m_pOwner->GetGUID(), m_GravityScale);
+
+                    SnapToFloor();
+                    m_pControllableComponent->VOnLandOnGround(0.0f);
+                    return;
+                }
                 m_pControllableComponent->VOnClimb(bIsClimbingUp, bIsOnTopLadder);
             }
             m_ClimbingSpeed = Point(0, 0);
@@ -635,7 +688,7 @@ set_velocity:
         if (fabs(m_CurrentSpeed.x) > DBL_EPSILON)
         {
             double runSpeed = g_pApp->GetGlobalOptions()->runSpeed;
-            if (auto pPowerupComp = MakeStrongPtr(m_pOwner->GetComponent<PowerupComponent>()))
+            if (shared_ptr<PowerupComponent> pPowerupComp = MakeStrongPtr(m_pOwner->GetComponent<PowerupComponent>()))
             {
                 if (pPowerupComp->HasPowerup(PowerupType_Catnip))
                 {
@@ -1003,8 +1056,9 @@ bool PhysicsComponent::AttachToLadder()
     assert(pPositionComponent);
 
     Point actorPosition = pPositionComponent->GetPosition();
-    for (const b2Fixture* pLadderFixture : m_OverlappingLaddersList)
+    for (size_t i = 0; i < m_OverlappingLaddersList.size(); i++)
     {
+        const b2Fixture* pLadderFixture = m_OverlappingLaddersList[i];
         // Assume ladder is rectangular which means I can aswell use its aabb for exact position
         b2AABB aabb = pLadderFixture->GetAABB(0);
 
@@ -1019,6 +1073,16 @@ bool PhysicsComponent::AttachToLadder()
 
         if (actorPosition.x > topleft.x && actorPosition.x < bottomright.x)
         {
+            // Feet already at the top end of the ladder (standing on the floor there, a few pixels
+            // under the ladder's end): nothing more to climb up
+            if (m_ClimbingSpeed.y < -DBL_EPSILON)
+            {
+                const SDL_Rect body = m_pPhysics->VGetAABB(m_pOwner->GetGUID(), true);
+                if (body.y + body.h <= topleft.y + 16)
+                {
+                    continue;
+                }
+            }
             m_pPhysics->VSetPosition(m_pOwner->GetGUID(), Point(center.x, actorPosition.y));
             //LOG("CAN CLIMB");
             return true;
@@ -1054,7 +1118,7 @@ bool PhysicsComponent::CheckOverlap(FixtureType withWhatFixture)
 
 void PhysicsComponent::RemoveOverlappingLadder(const b2Fixture* ladder)
 {
-    for (auto iter = m_OverlappingLaddersList.begin(); iter != m_OverlappingLaddersList.end(); ++iter)
+    for (std::vector<const b2Fixture*>::iterator iter = m_OverlappingLaddersList.begin(); iter != m_OverlappingLaddersList.end(); ++iter)
     {
         if ((*iter) == ladder)
         {
@@ -1076,7 +1140,7 @@ void PhysicsComponent::AddOverlappingGround(const b2Fixture* pGround)
 
 void PhysicsComponent::RemoveOverlappingGround(const b2Fixture* pGround)
 {
-    for (auto iter = m_OverlappingGroundsList.begin(); iter != m_OverlappingGroundsList.end(); ++iter)
+    for (std::vector<const b2Fixture*>::iterator iter = m_OverlappingGroundsList.begin(); iter != m_OverlappingGroundsList.end(); ++iter)
     {
         if ((*iter) == pGround)
         {
@@ -1098,7 +1162,7 @@ void PhysicsComponent::AddOverlappingKinematicBody(const b2Body* pBody)
 
 void PhysicsComponent::RemoveOverlappingKinematicBody(const b2Body* pBody)
 {
-    for (auto iter = m_OverlappingKinematicBodiesList.begin(); iter != m_OverlappingKinematicBodiesList.end(); ++iter)
+    for (std::vector<const b2Body*>::iterator iter = m_OverlappingKinematicBodiesList.begin(); iter != m_OverlappingKinematicBodiesList.end(); ++iter)
     {
         if ((*iter) == pBody)
         {

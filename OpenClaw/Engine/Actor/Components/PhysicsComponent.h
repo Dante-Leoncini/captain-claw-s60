@@ -175,6 +175,10 @@ private:
     std::vector<const b2Body*> m_OverlappingKinematicBodiesList;
     std::vector<const b2Fixture*> m_OverlappingLaddersList;
     std::vector<const b2Fixture*> m_OverlappingGroundsList;
+
+    // Getting off at the top of a ladder
+    bool AreFeetAtLadderTop();
+    void SnapToFloor();
 };
 
 #endif

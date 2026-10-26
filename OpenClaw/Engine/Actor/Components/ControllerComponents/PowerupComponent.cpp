@@ -21,8 +21,9 @@ PowerupComponent::PowerupComponent()
 
 PowerupComponent::~PowerupComponent()
 {
-    for (const auto &pSparkle : m_PowerupSparkles)
+    for (size_t i = 0; i < m_PowerupSparkles.size(); i++)
     {
+        const StrongActorPtr &pSparkle = m_PowerupSparkles[i];
         pSparkle->Destroy();
     }
 
@@ -124,8 +125,9 @@ void PowerupComponent::ApplyPowerup(PowerupType powerupType, int32 msDuration)
 
 void PowerupComponent::SetPowerupSparklesVisibility(bool visible)
 {
-    for (const auto &pSparkle : m_PowerupSparkles)
+    for (size_t i = 0; i < m_PowerupSparkles.size(); i++)
     {
+        const StrongActorPtr &pSparkle = m_PowerupSparkles[i];
         shared_ptr<ActorRenderComponent> pRenderComponent =
             MakeStrongPtr(pSparkle->GetComponent<ActorRenderComponent>(ActorRenderComponent::g_Name));
         assert(pRenderComponent);
@@ -166,8 +168,9 @@ void PowerupComponent::ClawDiedDelegate(IEventDataPtr pEventData)
 
 void PowerupSubject::NotifyPowerupStatusUpdated(PowerupType powerupType, bool isPowerupFinished)
 {
-    for (PowerupObserver* pObserver : m_Observers)
+    for (size_t i = 0; i < m_Observers.size(); i++)
     {
+        PowerupObserver* pObserver = m_Observers[i];
         pObserver->VOnPowerupStatusChanged(powerupType, isPowerupFinished);
     }
 }

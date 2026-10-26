@@ -37,8 +37,9 @@ bool AnimationComponent::VInit(TiXmlElement* data)
         std::vector<std::string> matchingAnimNames =
             g_pApp->GetResourceCache()->Match(animationsPath);
 
-        for (std::string& animPath : matchingAnimNames)
+        for (size_t i = 0; i < matchingAnimNames.size(); i++)
         {
+            std::string& animPath = matchingAnimNames[i];
             WapAni* wapAni = AniResourceLoader::LoadAndReturnAni(animPath.c_str());
             std::string animNameKey = StripPathAndExtension(animPath);
 
@@ -114,8 +115,9 @@ void AnimationComponent::VPostInit()
     m_pActorRenderComponent = pRenderComponent;
 
     // TODO: Get rid of this. Obfuscated, unmaintanable...
-    for (const std::string& animType : m_SpecialAnimationRequestList)
+    for (size_t i = 0; i < m_SpecialAnimationRequestList.size(); i++)
     {
+        const std::string& animType = m_SpecialAnimationRequestList[i];
         if (animType.find("cycle") != std::string::npos)
         {
             std::string cycleDurationStr = animType;
@@ -161,8 +163,9 @@ void AnimationComponent::VPostInit()
         }
     }
 
-    for (const SpecialAnimation& specialAnim : m_SpecialAnimationList)
+    for (size_t i = 0; i < m_SpecialAnimationList.size(); i++)
     {
+        const SpecialAnimation& specialAnim = m_SpecialAnimationList[i];
         assert(specialAnim.type == "cycle" && "Currently supporting only cycle special animation");
 
         if (specialAnim.type == "cycle")
@@ -247,7 +250,7 @@ bool AnimationComponent::SetAnimation(const std::string& animationName)
     }
     //LOG("Setting animation: " + animationName);
 
-    auto findIt = _animationMap.find(animationName);
+    AnimationMap::iterator findIt = _animationMap.find(animationName);
     if (findIt == _animationMap.end())
     {
         LOG_WARNING("Could not find animation: " + animationName + " for actor: " + m_pOwner->GetName());
@@ -390,8 +393,9 @@ AnimationSubject::~AnimationSubject()
 
 void AnimationSubject::NotifyAnimationLooped(Animation* pAnimation)
 {
-    for (AnimationObserver* pSubject : m_AnimationObservers)
+    for (size_t i = 0; i < m_AnimationObservers.size(); i++)
     {
+        AnimationObserver* pSubject = m_AnimationObservers[i];
         if (pSubject)
         {
             pSubject->VOnAnimationLooped(pAnimation);
@@ -401,8 +405,9 @@ void AnimationSubject::NotifyAnimationLooped(Animation* pAnimation)
 
 void AnimationSubject::NotifyAnimationStarted(Animation* pAnimation)
 {
-    for (AnimationObserver* pSubject : m_AnimationObservers)
+    for (size_t i = 0; i < m_AnimationObservers.size(); i++)
     {
+        AnimationObserver* pSubject = m_AnimationObservers[i];
         if (pSubject)
         {
             pSubject->VOnAnimationStarted(pAnimation);
@@ -412,8 +417,9 @@ void AnimationSubject::NotifyAnimationStarted(Animation* pAnimation)
 
 void AnimationSubject::NotifyAnimationFrameChanged(Animation* pAnimation, AnimationFrame* pLastFrame, AnimationFrame* pNewFrame)
 {
-    for (AnimationObserver* pSubject : m_AnimationObservers)
+    for (size_t i = 0; i < m_AnimationObservers.size(); i++)
     {
+        AnimationObserver* pSubject = m_AnimationObservers[i];
         if (pSubject)
         {
             pSubject->VOnAnimationFrameChanged(pAnimation, pLastFrame, pNewFrame);
@@ -423,8 +429,9 @@ void AnimationSubject::NotifyAnimationFrameChanged(Animation* pAnimation, Animat
 
 void AnimationSubject::NotifyAnimationPaused(Animation* pAnimation)
 {
-    for (AnimationObserver* pSubject : m_AnimationObservers)
+    for (size_t i = 0; i < m_AnimationObservers.size(); i++)
     {
+        AnimationObserver* pSubject = m_AnimationObservers[i];
         if (pSubject)
         {
             pSubject->VOnAnimationPaused(pAnimation);
@@ -434,8 +441,9 @@ void AnimationSubject::NotifyAnimationPaused(Animation* pAnimation)
 
 void AnimationSubject::NotifyAnimationResumed(Animation* pAnimation)
 {
-    for (AnimationObserver* pSubject : m_AnimationObservers)
+    for (size_t i = 0; i < m_AnimationObservers.size(); i++)
     {
+        AnimationObserver* pSubject = m_AnimationObservers[i];
         if (pSubject)
         {
             pSubject->VOnAnimationResumed(pAnimation);
@@ -445,8 +453,9 @@ void AnimationSubject::NotifyAnimationResumed(Animation* pAnimation)
 
 void AnimationSubject::NotifyAnimationAtLastFrame(Animation* pAnimation)
 {
-    for (AnimationObserver* pSubject : m_AnimationObservers)
+    for (size_t i = 0; i < m_AnimationObservers.size(); i++)
     {
+        AnimationObserver* pSubject = m_AnimationObservers[i];
         if (pSubject)
         {
             pSubject->VOnAnimationAtLastFrame(pAnimation);
@@ -456,8 +465,9 @@ void AnimationSubject::NotifyAnimationAtLastFrame(Animation* pAnimation)
 
 void AnimationSubject::NotifyAnimationChanged(Animation* pOldAnimation, Animation* pNewAnimation)
 {
-    for (AnimationObserver* pSubject : m_AnimationObservers)
+    for (size_t i = 0; i < m_AnimationObservers.size(); i++)
     {
+        AnimationObserver* pSubject = m_AnimationObservers[i];
         if (pSubject)
         {
             pSubject->VOnAnimationChanged(pOldAnimation, pNewAnimation);
@@ -467,8 +477,9 @@ void AnimationSubject::NotifyAnimationChanged(Animation* pOldAnimation, Animatio
 
 void AnimationSubject::NotifyAnimationEndedDelay(Animation* pOldAnimation)
 {
-    for (AnimationObserver* pSubject : m_AnimationObservers)
+    for (size_t i = 0; i < m_AnimationObservers.size(); i++)
     {
+        AnimationObserver* pSubject = m_AnimationObservers[i];
         if (pSubject)
         {
             pSubject->VOnAnimationEndedDelay(pOldAnimation);

@@ -1,4 +1,5 @@
 #include <memory.h>
+#include <string.h>
 #include "StringUtil.h"
 
 using std::string;
@@ -13,7 +14,7 @@ void TrimLeft(std::string &s)
     {
         char ch = s[i];
         int white =
-#ifdef UNICODE
+#if defined(UNICODE) && !defined(__SYMBIAN32__)
             iswspace(ch);
 #else
             isspace(ch);

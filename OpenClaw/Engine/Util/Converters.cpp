@@ -165,12 +165,21 @@ TiXmlElement* WwdToXml(WapWwd* wapWwd, int levelNumber)
         TiXmlElement* tiles = new TiXmlElement("Tiles");
         planeRenderComponentElem->LinkEndChild(tiles);
 
+        // All tile numbers in one text node, separated by spaces: one element per tile
+        // costs ~30 MB of XML nodes on a big level
         uint32 tilesCount = wwdPlane.tilesCount;
         int32* pTiles = wwdPlane.tiles;
+        std::string tileData;
+        tileData.reserve(tilesCount * 4);
         for (uint32 tileIdx = 0; tileIdx < tilesCount; ++tileIdx)
         {
-            XML_ADD_TEXT_ELEMENT("Tile", ToStr(pTiles[tileIdx]).c_str(), tiles);
+            if (tileIdx > 0)
+            {
+                tileData += ' ';
+            }
+            tileData += ToStr(pTiles[tileIdx]);
         }
+        tiles->LinkEndChild(new TiXmlText(tileData.c_str()));
 
         if (wwdPlane.properties.flags & WAP_PLANE_FLAG_MAIN_PLANE)
         {
@@ -191,7 +200,7 @@ TiXmlElement* WwdToXml(WapWwd* wapWwd, int levelNumber)
     std::string imagesRootPath = wapWwd->properties.imageSet1;
     std::replace(imagesRootPath.begin(), imagesRootPath.end(), '\\', '/');
     imagesRootPath += '/';
-    imagesRootPath.insert(0, 1, '/');
+    imagesRootPath.insert(imagesRootPath.begin(), '/');
 
     std::vector<std::string> notLoadedActorList;
 
@@ -348,8 +357,9 @@ TiXmlElement* WwdToXml(WapWwd* wapWwd, int levelNumber)
         notLoadedActorList.erase(unique(notLoadedActorList.begin(), notLoadedActorList.end()), notLoadedActorList.end());
 
         LOG_ERROR("Failed to load certain actors:");
-        for (const std::string& actorLogic : notLoadedActorList)
+        for (size_t actorLogicIdx = 0; actorLogicIdx < notLoadedActorList.size(); actorLogicIdx++)
         {
+            const std::string& actorLogic = notLoadedActorList[actorLogicIdx];
             LOG_ERROR("NOT LOADED: " + actorLogic);
         }
 

@@ -75,8 +75,9 @@ void BaseAuraComponent::VUpdate(uint32 msDiff)
         m_TimeSinceLastPulse += msDiff;
         if (m_TimeSinceLastPulse >= m_PulseInterval)
         {
-            for (PulseInfo& actorPulse : m_ActivePulseList)
+            for (size_t i = 0; i < m_ActivePulseList.size(); i++)
             {
+                PulseInfo& actorPulse = m_ActivePulseList[i];
                 if (actorPulse.pActor == NULL)
                 {
                     continue;
@@ -90,8 +91,9 @@ void BaseAuraComponent::VUpdate(uint32 msDiff)
     }
     else
     {
-        for (PulseInfo& actorPulse : m_ActivePulseList)
+        for (size_t i = 0; i < m_ActivePulseList.size(); i++)
         {
+            PulseInfo& actorPulse = m_ActivePulseList[i];
             actorPulse.timeSinceLastPulseMs += msDiff;
             if (actorPulse.timeSinceLastPulseMs >= m_PulseInterval)
             {
@@ -114,8 +116,9 @@ void BaseAuraComponent::VUpdate(uint32 msDiff)
 
 void BaseAuraComponent::OnActorEntered(Actor* pActor)
 {
-    for (const auto &pulseInfo : m_ActivePulseList)
+    for (size_t i = 0; i < m_ActivePulseList.size(); i++)
     {
+        const PulseInfo &pulseInfo = m_ActivePulseList[i];
         if (pulseInfo.pActor == pActor)
         {
             return;
@@ -152,8 +155,9 @@ void BaseAuraComponent::SetEnabled(bool enabled)
 {
     if (!m_bIsEnabled && enabled)
     {
-        for (PulseInfo& pulse : m_ActivePulseList)
+        for (size_t i = 0; i < m_ActivePulseList.size(); i++)
         {
+            PulseInfo& pulse = m_ActivePulseList[i];
             if (pulse.pActor == NULL)
             {
                 continue;
@@ -217,6 +221,7 @@ void DamageAuraComponent::VOnAuraApply(Actor* pActorInAura)
         }
 
         // TODO: In original game this causes the damage impact anim effect
-        pHealthComponent->AddHealth((-1) * m_Damage, DamageType_None, Point(0, 0), m_pOwner->GetGUID());
+        pHealthComponent->AddHealth((-1) * m_Damage, m_bIsEnemyUnit ? DamageType_EnemyAura : DamageType_None,
+            Point(0, 0), m_pOwner->GetGUID());
     }
 }

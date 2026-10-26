@@ -117,9 +117,9 @@ struct LevelSave
         TiXmlElement* pLevelXml = new TiXmlElement("Level");
         XML_ADD_TEXT_ELEMENT("LevelNumber", ToStr(levelNumber).c_str(), pLevelXml);
         XML_ADD_TEXT_ELEMENT("LevelName", levelName.c_str(), pLevelXml);
-        for (auto saveIter : checkpointMap)
+        for (std::map<uint32, CheckpointSave>::iterator saveIter = checkpointMap.begin(); saveIter != checkpointMap.end(); ++saveIter)
         {
-            pLevelXml->LinkEndChild(saveIter.second.ToXml());
+            pLevelXml->LinkEndChild(saveIter->second.ToXml());
         }
 
         return pLevelXml;
@@ -165,11 +165,11 @@ struct LevelSave
         // Little bit unlucky when using map
         uint32 lastCheckpoint = 0;
 
-        for (auto checkpointIter : checkpointMap)
+        for (std::map<uint32, CheckpointSave>::iterator checkpointIter = checkpointMap.begin(); checkpointIter != checkpointMap.end(); ++checkpointIter)
         {
-            if (checkpointIter.second.checkpointIdx > lastCheckpoint)
+            if (checkpointIter->second.checkpointIdx > lastCheckpoint)
             {
-                lastCheckpoint = checkpointIter.second.checkpointIdx;
+                lastCheckpoint = checkpointIter->second.checkpointIdx;
             }
         }
 
@@ -179,7 +179,7 @@ struct LevelSave
     // Can return NULL
     CheckpointSave* GetCheckpointSave(uint32 checkpointNumber)
     {
-        auto findIt = checkpointMap.find(checkpointNumber);
+        std::map<uint32, CheckpointSave>::iterator findIt = checkpointMap.find(checkpointNumber);
         if (findIt == checkpointMap.end())
         {
             return NULL;
@@ -292,9 +292,9 @@ public:
     TiXmlElement* ToXml()
     {
         TiXmlElement* pGameSaves = new TiXmlElement("GameSaves");
-        for (auto levelSave : m_LevelSaveMap)
+        for (LevelSaveMap::iterator levelSave = m_LevelSaveMap.begin(); levelSave != m_LevelSaveMap.end(); ++levelSave)
         {
-            pGameSaves->LinkEndChild(levelSave.second.ToXml());
+            pGameSaves->LinkEndChild(levelSave->second.ToXml());
         }
 
         return pGameSaves;
@@ -311,7 +311,7 @@ public:
     {
         assert(levelNumber <= LEVELS_COUNT);
 
-        auto findIt = m_LevelSaveMap.find(levelNumber);
+        LevelSaveMap::iterator findIt = m_LevelSaveMap.find(levelNumber);
         if (findIt == m_LevelSaveMap.end())
         {
             LOG_ERROR("Creating checkpoint for level save which is unitialized !");
@@ -326,7 +326,7 @@ public:
     {
         assert(levelNumber <= LEVELS_COUNT);
 
-        auto findIt = m_LevelSaveMap.find(levelNumber);
+        LevelSaveMap::iterator findIt = m_LevelSaveMap.find(levelNumber);
         if (findIt == m_LevelSaveMap.end())
         {
             return NULL;

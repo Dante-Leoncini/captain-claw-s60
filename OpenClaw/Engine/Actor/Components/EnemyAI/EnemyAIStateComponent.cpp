@@ -15,6 +15,7 @@
 #include "../../../Events/Events.h"
 
 #include <time.h>
+#include <limits.h>
 
 const char* BaseEnemyAIStateComponent::g_Name = "BaseEnemyAIStateComponent";
 const char* TakeDamageAIStateComponent::g_Name = "TakeDamageAIStateComponent";
@@ -33,8 +34,8 @@ const char* KatherineBossAIStateComponent::g_Name = "KatherineBossAIStateCompone
 const char* WolvingtonBossAIStateComponent::g_Name = "WolvingtonBossAIStateComponent";
 const char* RollEnemyAIStateComponent::g_Name = "RollEnemyAIStateComponent";
 
-#define MAX_STATE_PRIORITY INT32_MAX
-#define MIN_STATE_PRIORITY INT32_MIN
+#define MAX_STATE_PRIORITY INT_MAX
+#define MIN_STATE_PRIORITY INT_MIN
 
 // TODO: Returning pointer like this is inconsistent...
 static shared_ptr<EnemyAttackAction> XmlToEnemyAttackActionPtr(TiXmlElement* pElem)
@@ -763,7 +764,7 @@ void PatrolEnemyAIStateComponent::VOnActorLeftTrigger(Actor* pActorWhoLeft, Fixt
         return; 
     }
 
-    for (auto iter = m_ChasedActorsList.begin(); iter != m_ChasedActorsList.end(); ++iter)
+    for (ActorList::iterator iter = m_ChasedActorsList.begin(); iter != m_ChasedActorsList.end(); ++iter)
     {
         if ((*iter) == pActorWhoLeft)
         {
@@ -874,14 +875,15 @@ void ParryEnemyAIStateComponent::VOnAnimationLooped(Animation* pAnimation)
 
 bool ParryEnemyAIStateComponent::CanParry(DamageType damageType, EnemyAIState currentState)
 {
-    auto findIt = m_ParryChanceMap.find(damageType);
+    ParryChanceMap::iterator findIt = m_ParryChanceMap.find(damageType);
     if (findIt == m_ParryChanceMap.end())
     {
         return false;
     }
 
-    for (const IgnoreParryInAnim& ignoreParryDef : m_IgnoreParryInAnimList)
+    for (size_t i = 0; i < m_IgnoreParryInAnimList.size(); i++)
     {
+        const IgnoreParryInAnim& ignoreParryDef = m_IgnoreParryInAnimList[i];
         if ((m_pAnimationComponent->GetCurrentAnimationName() == ignoreParryDef.animationName) &&
             (m_pAnimationComponent->GetCurrentAnimation()->GetCurrentAnimationFrame()->idx >= ignoreParryDef.minAnimIdx))
         {
@@ -982,8 +984,9 @@ void BaseAttackAIStateComponent::VPostInit()
 
 void BaseAttackAIStateComponent::VPostPostInit()
 {
-    for (const shared_ptr<EnemyAttackAction> &pAttackAction : m_AttackActions)
+    for (size_t i = 0; i < m_AttackActions.size(); i++)
     {
+        const shared_ptr<EnemyAttackAction> &pAttackAction = m_AttackActions[i];
         g_pApp->GetGameLogic()->VGetGamePhysics()->VAddActorFixtureToBody(
             m_pOwner->GetGUID(),
             &pAttackAction->agroSensorFixture);
@@ -1026,7 +1029,7 @@ void BaseAttackAIStateComponent::VExecuteAttack()
         m_pRenderComponent->SetMirrored(true);
     }
 
-    srand((long)this + time(NULL));
+    srand((size_t)this + time(NULL));
 
     // TODO: Pick randomly melee action ?
 
@@ -1112,7 +1115,7 @@ void BaseAttackAIStateComponent::OnEnemyEnterAgroRange(Actor* pEnemy)
 
 void BaseAttackAIStateComponent::OnEnemyLeftAgroRange(Actor* pEnemy)
 {
-    for (auto iter = m_EnemyAgroList.begin(); iter != m_EnemyAgroList.end(); ++iter)
+    for (ActorList::iterator iter = m_EnemyAgroList.begin(); iter != m_EnemyAgroList.end(); ++iter)
     {
         if ((*iter) == pEnemy)
         {
@@ -1134,8 +1137,9 @@ Actor* BaseAttackAIStateComponent::FindClosestHostileActor()
     Point closest(DBL_MAX, DBL_MAX);
     Actor* pClosestEnemy = NULL;
 
-    for (Actor* pHostileActor : m_EnemyAgroList)
+    for (size_t i = 0; i < m_EnemyAgroList.size(); i++)
     {
+        Actor* pHostileActor = m_EnemyAgroList[i];
         assert(pHostileActor != NULL);
 
         shared_ptr<PositionComponent> pHostileActorPositionComponent = pHostileActor->GetPositionComponent();
@@ -1478,8 +1482,9 @@ bool DiveAttackAIStateComponent::VDelegateInit(TiXmlElement* pData)
 
 void DiveAttackAIStateComponent::VPostPostInit()
 {
-    for (const ActorFixtureDef& diveFixture : m_DiveAreaSensorFixtureList)
+    for (size_t i = 0; i < m_DiveAreaSensorFixtureList.size(); i++)
     {
+        const ActorFixtureDef& diveFixture = m_DiveAreaSensorFixtureList[i];
         g_pApp->GetGameLogic()->VGetGamePhysics()->VAddActorFixtureToBody(
             m_pOwner->GetGUID(),
             &diveFixture);
@@ -1591,7 +1596,7 @@ void DiveAttackAIStateComponent::OnEnemyEnterAgroRange(Actor* pActor)
 
 void DiveAttackAIStateComponent::OnEnemyLeftAgroRange(Actor* pActor)
 {
-    for (auto iter = m_EnemyAgroList.begin(); iter != m_EnemyAgroList.end(); ++iter)
+    for (ActorList::iterator iter = m_EnemyAgroList.begin(); iter != m_EnemyAgroList.end(); ++iter)
     {
         if ((*iter) == pActor)
         {
@@ -1637,7 +1642,7 @@ void BaseBossAIStateComponennt::VPostInit()
 {
     BaseEnemyAIStateComponent::VPostInit();
 
-    auto pHC = MakeStrongPtr(m_pOwner->GetComponent<HealthComponent>());
+    shared_ptr<HealthComponent> pHC = MakeStrongPtr(m_pOwner->GetComponent<HealthComponent>());
     assert(pHC != nullptr);
 
     m_pHealthComponent = pHC.get();
@@ -1990,7 +1995,7 @@ void RollEnemyAIStateComponent::VOnActorLeftTrigger(Actor* pActorWhoLeft, Fixtur
         return;
     }
 
-    for (auto iter = m_ActorsInLosList.begin(); iter != m_ActorsInLosList.end(); ++iter)
+    for (ActorList::iterator iter = m_ActorsInLosList.begin(); iter != m_ActorsInLosList.end(); ++iter)
     {
         if ((*iter) == pActorWhoLeft)
         {

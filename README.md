@@ -1,144 +1,109 @@
-# OpenClaw - Captain Claw (1997) reimplementation
+# Captain Claw for Nokia S60 (N95)
 
- - This project is a multiplatform C++ reimplementation of original Captain Claw (1997) platformer game
- - Whole codebase was written from scratch
- - Game uses assets from original game archive (CLAW.REZ)
+An unfinished port of **Captain Claw** (Monolith, 1997) to Symbian S60 3rd Edition phones. It is
+built on [OpenClaw](https://github.com/pjasicek/OpenClaw), the open source reimplementation of the
+game by Pavel Jasiček and contributors. It runs on a Nokia N95: OpenGL ES 1.1 on the PowerVR MBX,
+movies, sound and music.
 
-**Level 1 youtube playthrough:**
+> **It is not finished, and I will not continue it.** The game is playable: menus, the first level,
+> the movies, saving at checkpoints. But many details are still missing or wrong; see
+> [Known problems](#known-problems). I am leaving it here for anyone interested in fixing it.
 
-[![OpenClaw - Level 1](https://img.youtube.com/vi/ikXQNV_aw68/0.jpg)](https://www.youtube.com/watch?v=ikXQNV_aw68)
+> **No game data is included.** The installer contains this port only. You need your own copy of
+> Captain Claw and have to copy two of its files to the phone by hand (see [Installing](#installing)).
 
-# Build status
+The port was made with [Claude](https://claude.ai) (Anthropic's AI model, through Claude Code), with me
+directing and testing it on a real N95.
 
-### Windows:
+## Installing
 
-[![Build Status](https://ci.appveyor.com/api/projects/status/github/pjasicek/OpenClaw?svg=true)](https://ci.appveyor.com/project/pjasicek/captainclaw)
+Tested on a Nokia N95 (S60 3rd Edition FP1). Other S60 3rd Edition phones with OpenGL ES graphics
+hardware may work.
 
-### Linux (debian), macOS, Windows, Android, Emscripten:
+1. **Allow self-signed applications.** In *Application manager → Options → Settings → Software
+   installation*, choose *All*.
+2. **Open C / Open C++.** The phone needs the Open C / Open C++ libraries. Many firmwares already
+   have them; otherwise install Nokia's Open C/C++ plug-in.
+3. **Install** [`symbian/release/CaptainClaw-S60.sisx`](symbian/release/CaptainClaw-S60.sisx) to the
+   **memory card (E:)**. It puts `ASSETS.ZIP`, `config.xml` and `SAVES.XML` in `E:\data\claw\`.
+4. **Copy the original game data** from your Captain Claw CD to the same folder on the memory card,
+   `E:\data\claw\`, for example with the phone in USB mass storage mode:
 
-[![Build Status](https://travis-ci.org/pjasicek/OpenClaw.svg?branch=master)](https://travis-ci.org/pjasicek/OpenClaw)
+   | From the Captain Claw CD | To the phone           | Needed for                 |
+   |--------------------------|------------------------|----------------------------|
+   | `DATA\CLAW.REZ` (120 MB) | `E:\data\claw\CLAW.REZ`| the game (required)        |
+   | `MOVIES\CLAW.FEC` (355 MB)| `E:\data\claw\CLAW.FEC`| the movies (optional)     |
 
-### Static analysis / Code coverage:
+   On the card (as seen from a PC) the folder is `data\claw\`. Both the English and the localized
+   (e.g. Spanish) CD releases work.
 
-[![Static analysis](https://scan.coverity.com/projects/12422/badge.svg?flat=1)](https://scan.coverity.com/projects/pjasicek-captainclaw)
+5. **Start** *Captain Claw* from the phone's menu. The first start takes about 30 seconds (the game
+   archive is indexed), and a level takes about 45 seconds to load.
 
-# Tech
+Each run writes a log to `E:\data\claw\openclaw.log`. `E:\data\claw\config.xml` holds the settings,
+for example:
+- `GameSpeed`: 1 = normal speed, less is slower.
+- `SoundVolume` and `MusicVolume`.
+- `ActiveAreaMargin`: how far outside the screen the world is still simulated.
 
-  - SDL2 Libraries (SDL2, SDL_Image, SDL_TTF, SDL_Mixer, SDL2_Gfx) for graphics, input, font and audio
-  - Box2D Library for Physics
-  - Tinyxml library for data-driven approach
+### Controls
 
-# Building and running
-For all platforms you will need original `CLAW.REZ` game archive in `Build_Release` directory from original game
+| Key                 | Action                           |
+|---------------------|----------------------------------|
+| D-pad / 2 4 6 8     | move, climb, duck; menus         |
+| centre / 5          | jump, select in menus            |
+| 1 / 0 / green       | attack                           |
+| 3 / #               | fire (pistol / magic / dynamite) |
+| 7 / *               | change ammo                      |
+| softkeys / C        | in-game menu, back               |
+| volume keys         | volume                           |
 
-Zip all content inside `Build_Release/ASSETS` directory to `ASSETS.ZIP` file.
+The screen follows the phone: landscape (320x240) or portrait (240x320).
 
-### Windows
-  - Project contains VS2017 solution with all libraries and include directories preset
-  - Project also contains CMake files if you want to use other IDEs.
-  ```shell script
-    mkdir build
-    cd build
-    
-    cmake -G "Visual Studio 15 2017" ..
-    msbuild OpenClaw.sln
-    # Or
-    cmake -G "NMake Makefiles" ..
-    nmake
-  ```
-  - Box2D is generated by CMake and it hardcodes the file paths. If you want to compile it on your own, you must run CMake on the CMakeLists.txt in the Box2D root directory
-  - Do not try to use different versions of SDL libraries than the ones which are already included in the Build_Release folder
+## Known problems
 
-### Linux
-  **Prerequisites for Ubuntu 16.04 (should be almost identical for Fedora/CentOS/*):**
-  ```shell script
-  sudo apt install libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libsdl2-gfx-dev
-  ``` 
-  You could also install `libtinyxml-dev` but this library will be compiled and linked from `ThirdParty/Tinyxml` directory.
-  Edit root `CMakeLists.txt` file to change this behaviour.
-  
-  **Compilation:**
-  - `git clone https://github.com/pjasicek/OpenClaw.git`
-  - CLAW.REZ iz required from original game in the OpenClaw/Build_Release folder
-  - Use `cmake` to build fresh Makefile. There is no need specific arguments.
-  - `make` (it's going to use all threads to compile, edit Makefile in Build_Release folder to whatever number of simultaneous threads you want it on your machine to run)
+- **Power-up music.** It does not play: the phone opens the song and reports it as playing, but
+  nothing is heard. The song itself (`GAME\MUSIC\POWERUP.XMI`, converted to MIDI) is silent on the
+  phone's synthesizer even as the first song. The level music works. A suspect is its unusual timing
+  division (132 ticks per beat).
+- **Crashes.** The game occasionally crashes, once when shooting a barrel. The N95 has very little
+  free memory while a level runs (about 9 MB). The log loses its last lines when the game crashes.
+- **Level start.** The level is revealed from black with a plain wipe. The original game's
+  "unrolling" effect is not reproduced.
+- **Physics.** OpenClaw uses Box2D with values tuned by eye. Movement, jumps and enemies do not feel
+  exactly like the original game.
+- **Speed.** Level 1 runs at about 35-40 fps on the N95. Loading a level takes about 45 seconds.
+- **Testing.** Only the first levels and the menus were really tested.
 
- **Remarks:**
+## What was changed
 
-  - For hearing background music play, you need to install **timidity (or timidity++)** and **freepats**. Some linux distributions come with it by default, some do not (fedora, archlinux)
-  - Does not work with SDL 2.0.6 - if you have the latest one from repository, you should be fine
-  
-### Android
-  
-  - Compilation / Deployment steps will be updated in near future, game itself is successfully running on Android
-  
-### WebAssembly (Emscripten)
-  
-  The project can be compiled as wasm code. This code is executed by modern web browsers without any additional runtime dependencies. Compiled once this code can work on any devices with different operation systems.
-  
-  **Compilation:**
-  - Install [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) from official website. I'm not sure that compilation will be successful on a Windows platform. If you use Windows then don't show off, enable Windows Subsystem for Linux (WSL), download Linux-like system (for example, Ubuntu) from Windows Store and install Emscripten SDK. It should be something like:
-    ```shell script
-    git clone https://github.com/emscripten-core/emsdk.git
-    cd emsdk
-    ./emsdk install latest
-    ./emsdk activate latest
-    source ./emsdk_env.sh
-    # Try to use latest version.
-    # If it doesn't work the project was successfully compiled on 1.39.11 version.
-    ```
-  - Make sure you have *python* and *cmake* packages. Ubuntu: `sudo apt install python cmake`.
-  - Make sure you have fresh `ASSETS.ZIP` and `CLAW.REZ` files in `Build_Release` directory.
-  - Compile:
-    ```shell script
-    mkdir build
-    cd build
-    emcmake cmake -DEmscripten=1 ..
-    # -DExtern_Config=0 parameter includes config.xml file in game resources
-    make
-    ```
-  
-  **Run:**
-  
-  You will need web server to run compiled project. There are 2 options:
-  - You can upload `openclaw.html`, `openclaw.js`, `openclaw.wasm` and `openclaw.data` (and `config.xml` if you build the project without `-DExtern_Config=0` parameter) files from `Build_Release` directory to any web server.
-  - Or run Python server:
-    ```shell script
-    cd Build_Release
-    python -m SimpleHTTPServer 8080
-    # Go to http://localhost:8080/openclaw.html
-    ``` 
-  
-  **Remarks:**
-  
-  There are some limitations:
-  - Some old web browsers does not support WebAssembly code. *Hi Internet Explorer!*
-  - Some web browsers does not support `.wav` file formats. *Microsoft? Again?*
-  - All web browsers does not support `.xmi` (MIDI) file formats. This files should be converted to another compatible formats. **All MIDI audio are disabled for now**.
-  - Some specific `SDL_Mixer` audio functions aren't implemented (*you can find it by `TODO: [EMSCRIPTEN]` search query*) but the game is playable.
-  - Death and teleport fade in effects are broken. Emscripten erases graphic buffer after each draw call. Do not use buffer from previous calls.
-  - There is a [FireFox bug](https://bugzilla.mozilla.org/show_bug.cgi?id=1292053) with a very long story which doesn't allow to prevent ALT default actions. ALT key presses will open window menu. Workarounds:
-    - Contribute to Mozilla and finally close this bug.
-    - Use fullscreen mode.
-    - Disable default ALT actions in FireFox `about:config` properties.
- 
-# In-game images
-  -  **TODO** - add screenshots
+[`symbian/CHANGES.md`](symbian/CHANGES.md) lists everything changed from OpenClaw. In short:
+- **Platform:** C++03 for the phone compiler, and a small SDL2 replacement drawing with OpenGL ES 1.1
+  through texture atlases.
+- **Movies:** the Smacker movies play, with a faster decoder.
+- **Performance:** the world far from the camera is no longer simulated, and resources are preloaded.
+- **Gameplay** fixes toward the original game: deaths, ladders, transitions, respawning.
 
-# Claw Launcher
+## Building
 
-  - Precompiled for Windows natively and for Linux use through Mono runtime
-  - Locates Claw binary and corresponding config.xml file
-  - Provides GUI to modify configuration (Video/Audio/Assets)
+How the `.sisx` is made is described in [`symbian/README.md`](symbian/README.md). In short:
+- Requirements: the Symbian SDK in `C:\epoc32` (as used by Carbide.c++) and RVCT 2.2 on Windows.
+- `symbian\build.bat` compiles `OpenClaw.exe`.
+- `python symbian\sis\make_sis.py` packs and signs `build_sis\OpenClaw.sisx`, with a self-made
+  certificate created on the first run.
+- `symbian/tools/build_pc.sh` builds the same code for Windows (MinGW) to test on a PC.
 
-### For Linux
+## Credits
 
-  **Prerequisites for Ubuntu 16.04 (should be almost identical for Fedora/CentOS/*):**
-  
-  `sudo apt install mono-runtime libmono-system4.0-cil libmono-system-windows-forms4.0-cil` 
-  
-  **Then run it like this:**
-  
-  `~/OpenClaw/Build_Release$ mono ClawLauncher.exe`
- 
--  **TODO** - add screenshots
+- **Captain Claw** © 1997 Monolith Productions. The game data is not part of this repository.
+- **[OpenClaw](https://github.com/pjasicek/OpenClaw)** by Pavel Jasiček and contributors (GPL-3.0),
+  on which all of this is built. Their original README is kept as
+  [`README.OpenClaw.md`](README.OpenClaw.md).
+- [libsmacker](http://libsmacker.sourceforge.net/) by Greg Kennedy (LGPL-2.1), for the movies.
+- [Box2D](https://box2d.org/) by Erin Catto, TinyXML and miniz, through OpenClaw.
+- Port: Dante Leoncini, made with Claude (Anthropic).
+
+## License
+
+GPL-3.0, like OpenClaw (see [`LICENSE.txt`](LICENSE.txt)). libsmacker keeps its own license, in
+[`ThirdParty/libsmacker/COPYING`](ThirdParty/libsmacker/COPYING).

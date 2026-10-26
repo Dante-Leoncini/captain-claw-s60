@@ -139,6 +139,40 @@ ActorFactory::ActorFactory()
     _componentFactory.Register<RedTailAIStateComponent>();
 }
 
+#ifdef OPENCLAW_FRAME_PROFILE
+// Time spent creating each kind of component, logged after a level loads (tuning slow devices)
+static std::map<std::string, std::pair<uint64_t, int> > s_ComponentCreationTime;
+static uint64_t s_PostInitTime = 0;
+
+static uint64_t ProfileNowUs()
+{
+    return (SDL_GetPerformanceCounter() * 1000000) / SDL_GetPerformanceFrequency();
+}
+
+void ActorFactory::LogCreationProfile()
+{
+    std::vector<std::pair<uint64_t, std::string> > sorted;
+    for (std::map<std::string, std::pair<uint64_t, int> >::iterator it = s_ComponentCreationTime.begin();
+        it != s_ComponentCreationTime.end(); ++it)
+    {
+        sorted.push_back(std::make_pair(it->second.first, it->first + " x" + ToStr(it->second.second)));
+    }
+    std::sort(sorted.rbegin(), sorted.rend());
+    std::string line = "[load] post-init " + ToStr((int)(s_PostInitTime / 1000)) + " ms;";
+    for (size_t i = 0; i < sorted.size() && i < 12; i++)
+    {
+        line += " " + sorted[i].second + " " + ToStr((int)(sorted[i].first / 1000)) + " ms;";
+    }
+    LOG(line);
+    s_ComponentCreationTime.clear();
+    s_PostInitTime = 0;
+}
+#else
+void ActorFactory::LogCreationProfile()
+{
+}
+#endif
+
 StrongActorPtr ActorFactory::CreateActor(TiXmlElement* pActorRoot, TiXmlElement* overrides)
 {
     //PROFILE_CPU("Create actor");
@@ -174,18 +208,27 @@ StrongActorPtr ActorFactory::CreateActor(TiXmlElement* pActorRoot, TiXmlElement*
 
     // Place for some hacks
 
+#ifdef OPENCLAW_FRAME_PROFILE
+    uint64_t postInitStart = ProfileNowUs();
+#endif
     actor->PostInit();
     actor->PostPostInit();
+#ifdef OPENCLAW_FRAME_PROFILE
+    s_PostInitTime += ProfileNowUs() - postInitStart;
+#endif
 
     return actor;
 }
 
+struct XmlDocumentDeleter
+{
+    void operator()(TiXmlElement *e) const { delete e->GetDocument(); }
+};
+
 StrongActorPtr ActorFactory::CreateActor(const char* actorResource, TiXmlElement* overrides)
 {
     // Grab the root XML node
-    auto deleter = [](TiXmlElement *e) { delete e->GetDocument(); };
-
-    std::unique_ptr<TiXmlElement, decltype(deleter)> root { XmlResourceLoader::LoadAndReturnRootXmlElement(actorResource, true), deleter};
+    std::unique_ptr<TiXmlElement, XmlDocumentDeleter> root(XmlResourceLoader::LoadAndReturnRootXmlElement(actorResource, true), XmlDocumentDeleter());
     if (root == NULL)
     {
         LOG_ERROR("Could not load XML root node");
@@ -223,6 +266,20 @@ void ActorFactory::ModifyActor(StrongActorPtr actor, TiXmlElement* overrides)
 StrongActorComponentPtr ActorFactory::VCreateComponent(TiXmlElement* data)
 {
     const char* name = data->Value();
+#ifdef OPENCLAW_FRAME_PROFILE
+    uint64_t startUs = ProfileNowUs();
+    struct ComponentTimer
+    {
+        const char* name;
+        uint64_t start;
+        ~ComponentTimer()
+        {
+            std::pair<uint64_t, int>& entry = s_ComponentCreationTime[name];
+            entry.first += ProfileNowUs() - start;
+            entry.second++;
+        }
+    } componentTimer = { name, startUs };
+#endif
     StrongActorComponentPtr component(_componentFactory.Create(ActorComponent::GetIdFromName(name)));
 
     // Initialize the component if we found one

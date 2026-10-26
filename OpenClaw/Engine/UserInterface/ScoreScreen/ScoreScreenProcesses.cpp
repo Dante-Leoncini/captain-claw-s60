@@ -96,25 +96,27 @@ SpawnScoreRowProcess::SpawnScoreRowProcess(const ScoreRowDef& scoreRowDef)
         Process()
 {
     // Initialize the actor category -> actor list map
-    m_ActorCategoryToActorListMap[ScoreRowActorType_Numbers_ItemsPickedUp] = {};
-    m_ActorCategoryToActorListMap[ScoreRowActorType_Numbers_ScorePointsFromThisRow] = {};
-    m_ActorCategoryToActorListMap[ScoreRowActorType_MovingScoreItems] = {};
+    m_ActorCategoryToActorListMap[ScoreRowActorType_Numbers_ItemsPickedUp] = ActorList();
+    m_ActorCategoryToActorListMap[ScoreRowActorType_Numbers_ScorePointsFromThisRow] = ActorList();
+    m_ActorCategoryToActorListMap[ScoreRowActorType_MovingScoreItems] = ActorList();
 
     m_ScoreItemDefaultSpeed = 300.0;
 }
 
 SpawnScoreRowProcess::~SpawnScoreRowProcess()
 {
-    for (Actor* pActor : m_ChildrenActorList)
+    for (size_t i = 0; i < m_ChildrenActorList.size(); i++)
     {
+        Actor* pActor = m_ChildrenActorList[i];
         assert(pActor != NULL);
 
         IEventMgr::Get()->VTriggerEvent(IEventDataPtr(
             new EventData_Destroy_Actor(pActor->GetGUID())));
     }
 
-    for (Actor* pActor : m_ActorCategoryToActorListMap[ScoreRowActorType_MovingScoreItems])
+    for (size_t i = 0; i < m_ActorCategoryToActorListMap[ScoreRowActorType_MovingScoreItems].size(); i++)
     {
+        Actor* pActor = m_ActorCategoryToActorListMap[ScoreRowActorType_MovingScoreItems][i];
         assert(pActor != NULL);
 
         IEventMgr::Get()->VTriggerEvent(IEventDataPtr(
@@ -418,7 +420,7 @@ void SpawnScoreRowProcess::ForceSpawnImmediately()
         SetCollectedSpawnedScoreItems(m_ScoreRowDef.countOfPickedUpScoreItems);
 
         // If we already spawned some moving items, destroy them
-        for (auto iter = m_ActorCategoryToActorListMap[ScoreRowActorType_MovingScoreItems].begin();
+        for (ActorList::iterator iter = m_ActorCategoryToActorListMap[ScoreRowActorType_MovingScoreItems].begin();
             iter != m_ActorCategoryToActorListMap[ScoreRowActorType_MovingScoreItems].end();
             /*iter++*/)
         {
@@ -499,13 +501,13 @@ int SpawnScoreRowProcess::CalculateScoreItemSpawnInterval()
 
 void SpawnScoreRowProcess::UpdateSpawnedScoreItemPositions(uint32 msDiff, const Point& speed)
 {
-    auto findIt = m_ActorCategoryToActorListMap.find(ScoreRowActorType_MovingScoreItems);
+    ScoreRowActorListMap::iterator findIt = m_ActorCategoryToActorListMap.find(ScoreRowActorType_MovingScoreItems);
     // Has to be present
     assert(findIt != m_ActorCategoryToActorListMap.end());
 
     ActorList& movingSpawnedScoreItemsList = findIt->second;
 
-    for (auto iter = movingSpawnedScoreItemsList.begin(); iter != movingSpawnedScoreItemsList.end();)
+    for (ActorList::iterator iter = movingSpawnedScoreItemsList.begin(); iter != movingSpawnedScoreItemsList.end();)
     {
         Actor* pSpawnedElem = (*iter);
         assert(pSpawnedElem != NULL);
@@ -551,8 +553,9 @@ void SpawnScoreRowProcess::AddNumberImageActors(int numberToDisplay, int futureM
     }
 
     m_ChildrenActorList.reserve(m_ChildrenActorList.size() + numberStr.length());
-    for (char charDigit : numberStr)
+    for (size_t i = 0; i < numberStr.size(); i++)
     {
+        char charDigit = numberStr[i];
         int digit = DigitCharToInt(charDigit);
         std::string numberImagePath;
 
@@ -573,7 +576,7 @@ void SpawnScoreRowProcess::AddNumberImageActors(int numberToDisplay, int futureM
 
         if (numberType != ScoreRowActorType_None)
         {
-            auto findIt = m_ActorCategoryToActorListMap.find(numberType);
+            ScoreRowActorListMap::iterator findIt = m_ActorCategoryToActorListMap.find(numberType);
             assert(findIt != m_ActorCategoryToActorListMap.end());
 
             ActorList& dynamicNumberImagesList = findIt->second;
@@ -598,7 +601,7 @@ void SpawnScoreRowProcess::SetScore(int score)
 
     m_CurrentScore = score;
 
-    auto findIt = m_ActorCategoryToActorListMap.find(ScoreRowActorType_Numbers_ScorePointsFromThisRow);
+    ScoreRowActorListMap::iterator findIt = m_ActorCategoryToActorListMap.find(ScoreRowActorType_Numbers_ScorePointsFromThisRow);
     assert(findIt != m_ActorCategoryToActorListMap.end());
 
     ActorList& totalScoreImageNumberList = findIt->second;
@@ -620,7 +623,7 @@ void SpawnScoreRowProcess::SetCollectedSpawnedScoreItems(int newCount)
 {
     m_CountOfCollectedSpawnedScoreItems = newCount;
 
-    auto findIt = m_ActorCategoryToActorListMap.find(ScoreRowActorType_Numbers_ItemsPickedUp);
+    ScoreRowActorListMap::iterator findIt = m_ActorCategoryToActorListMap.find(ScoreRowActorType_Numbers_ItemsPickedUp);
     assert(findIt != m_ActorCategoryToActorListMap.end());
 
     ActorList& totalCollectedSpawnedItemsActorList = findIt->second;

@@ -53,17 +53,17 @@ void SceneNode::VOnUpdate(Scene* pScene, uint32 msDiff)
     // This is meant to be called from any class
     // that inherits from SceneNode and overloads
     // VOnUpdate()
-    for (auto &child : m_ChildrenList)
+    for (SceneNodeList::iterator child = m_ChildrenList.begin(); child != m_ChildrenList.end(); ++child)
     {
-        child->VOnUpdate(pScene, msDiff);
+        (*child)->VOnUpdate(pScene, msDiff);
     }
 }
 
 void SceneNode::VRenderChildren(Scene* pScene)
 {
-    for (auto &childNode : m_ChildrenList)
+    for (SceneNodeList::iterator childNode = m_ChildrenList.begin(); childNode != m_ChildrenList.end(); ++childNode)
     {
-        RenderNode(pScene, childNode);
+        RenderNode(pScene, *childNode);
     }
 }
 
@@ -125,9 +125,9 @@ bool SceneNode::VRemoveChild(uint32 actorId)
 
 void SceneNode::SortChildrenByZCoord()
 {
-    for (auto &pChildNode : m_ChildrenList)
+    for (SceneNodeList::iterator pChildNode = m_ChildrenList.begin(); pChildNode != m_ChildrenList.end(); ++pChildNode)
     {
-        pChildNode->SortChildrenByZCoord();
+        (*pChildNode)->SortChildrenByZCoord();
     }
 
     std::sort(m_ChildrenList.begin(), m_ChildrenList.end(), NodeCompare);
@@ -144,27 +144,27 @@ void SceneNode::VSetPosition(const Point &position) {
 // RootNode Implementation
 //
 
-RootNode::RootNode() : SceneNode(INVALID_ACTOR_ID, NULL, RenderPass_0, { 0, 0 })
+RootNode::RootNode() : SceneNode(INVALID_ACTOR_ID, NULL, RenderPass_0, Point(0, 0))
 {
     m_ChildrenList.reserve(RenderPass_Last);
 
-    shared_ptr<SceneNode> backgroundGroup(new SceneNode(INVALID_ACTOR_ID, NULL, RenderPass_Background, { 0, 0 }));
+    shared_ptr<SceneNode> backgroundGroup(new SceneNode(INVALID_ACTOR_ID, NULL, RenderPass_Background, Point(0, 0)));
     m_ChildrenList.push_back(backgroundGroup);
 
-    shared_ptr<SceneNode> actionGroup(new SceneNode(INVALID_ACTOR_ID, NULL, RenderPass_Action, { 0, 0 }));
+    shared_ptr<SceneNode> actionGroup(new SceneNode(INVALID_ACTOR_ID, NULL, RenderPass_Action, Point(0, 0)));
     m_ChildrenList.push_back(actionGroup);
 
 //    shared_ptr<SceneNode> actorGroup(new SceneNode(INVALID_ACTOR_ID, NULL, RenderPass_Actor, { 0, 0 }));
     shared_ptr<SceneNode> actorGroup(new GridNode(RenderPass_Actor));
     m_ChildrenList.push_back(actorGroup);
 
-    shared_ptr<SceneNode> foregroundGroup(new SceneNode(INVALID_ACTOR_ID, NULL, RenderPass_Foreground, { 0, 0 }));
+    shared_ptr<SceneNode> foregroundGroup(new SceneNode(INVALID_ACTOR_ID, NULL, RenderPass_Foreground, Point(0, 0)));
     m_ChildrenList.push_back(foregroundGroup);
 
-    shared_ptr<SceneNode> HUDGroup(new SceneNode(INVALID_ACTOR_ID, NULL, RenderPass_HUD, { 0, 0 }));
+    shared_ptr<SceneNode> HUDGroup(new SceneNode(INVALID_ACTOR_ID, NULL, RenderPass_HUD, Point(0, 0)));
     m_ChildrenList.push_back(HUDGroup); 
 
-    shared_ptr<SceneNode> invisibleGroup(new SceneNode(INVALID_ACTOR_ID, NULL, RenderPass_NotRendered, { 0, 0 }));
+    shared_ptr<SceneNode> invisibleGroup(new SceneNode(INVALID_ACTOR_ID, NULL, RenderPass_NotRendered, Point(0, 0)));
     m_ChildrenList.push_back(invisibleGroup);
 }
 
@@ -214,8 +214,12 @@ void RootNode::VRenderChildren(Scene* pScene)
                 break;
 
             case RenderPass_HUD:
+            {
+                Point gameScale = g_pApp->BeginHUDScale();
                 m_ChildrenList[pass]->VRenderChildren(pScene);
+                g_pApp->SetScale(gameScale);
                 break;
+            }
         }
     }
 }
@@ -232,7 +236,7 @@ GridNode::GridNode(RenderPass renderPass) : m_CellWidth((int) (g_pApp->GetWindow
                                             m_CellHeight((int) (g_pApp->GetWindowSizeScaled().y * 1.3)),
                                             m_MaxRowCount(100),
                                             m_MaxColumnCount(100),
-                                            SceneNode(INVALID_ACTOR_ID, nullptr, renderPass, {0, 0}) {
+                                            SceneNode(INVALID_ACTOR_ID, nullptr, renderPass, Point(0, 0)) {
 
 }
 
@@ -250,21 +254,21 @@ bool GridNode::VAddChild(shared_ptr<ISceneNode> kid) {
 
 SDL_Point GridNode::WorldToGridPosition(int x, int y) const {
     // Max column/row count prevents infinite memory growing if an actor falls out of bound
-    return SDL_Point{
-            std::min(max(x, 0) / m_CellWidth, m_MaxColumnCount),
-            std::min(max(y, 0) / m_CellHeight, m_MaxRowCount)
-    };
+    SDL_Point gridPos;
+    gridPos.x = std::min(max(x, 0) / m_CellWidth, m_MaxColumnCount);
+    gridPos.y = std::min(max(y, 0) / m_CellHeight, m_MaxRowCount);
+    return gridPos;
 }
 
 void GridNode::AddToGrid(int x, int y, shared_ptr<ISceneNode> &ikid) {
     if (m_Grid.size() <= x) {
         m_Grid.resize(x + 1);
     }
-    auto &col = m_Grid[x];
+    std::vector<SceneNodeList> &col = m_Grid[x];
     if (col.size() <= y) {
         col.resize(y + 1);
     }
-    auto &cell = col[y];
+    SceneNodeList &cell = col[y];
 
     // Nodes in grid cells are always ordered
     cell.insert(
@@ -278,9 +282,11 @@ void GridNode::AddToGrid(int x, int y, shared_ptr<ISceneNode> &ikid) {
 
 bool GridNode::VRemoveChild(uint32 actorId) {
     // TODO: Expensive
-    for (auto &column : m_Grid) {
-        for (auto &nodes : column) {
-            for (auto it = nodes.begin(); it != nodes.end(); ++it) {
+    for (size_t columnIdx = 0; columnIdx < m_Grid.size(); ++columnIdx) {
+        std::vector<SceneNodeList> &column = m_Grid[columnIdx];
+        for (size_t nodesIdx = 0; nodesIdx < column.size(); ++nodesIdx) {
+            SceneNodeList &nodes = column[nodesIdx];
+            for (SceneNodeList::iterator it = nodes.begin(); it != nodes.end(); ++it) {
                 if ((*it)->VGetProperties()->GetActorId() == actorId) {
                     nodes.erase(it);
                     return true;
@@ -306,18 +312,18 @@ void GridNode::VRenderChildren(Scene* pScene)
 
     int nodeCount = 0;
     for (int x = intersect.x; x < intersect.x + intersect.w && x < m_Grid.size(); ++x) {
-        auto &column = m_Grid[x];
+        std::vector<SceneNodeList> &column = m_Grid[x];
         for (int y = intersect.y; y < intersect.y + intersect.h && y < column.size(); ++y) {
             nodeCount += column[y].size();
         }
     }
 
-    std::vector<shared_ptr<ISceneNode>> intersectedNodes;
+    std::vector<shared_ptr<ISceneNode> > intersectedNodes;
     intersectedNodes.reserve(nodeCount);
     for (int x = intersect.x; x < intersect.x + intersect.w && x < m_Grid.size(); ++x) {
-        auto &column = m_Grid[x];
+        std::vector<SceneNodeList> &column = m_Grid[x];
         for (int y = intersect.y; y < intersect.y + intersect.h && y < column.size(); ++y) {
-            auto &nodes = column[y];
+            SceneNodeList &nodes = column[y];
             if (!nodes.empty()) {
                 // Insert sorted vector to the end of sorted vector
                 int oldSize = intersectedNodes.size();
@@ -327,8 +333,8 @@ void GridNode::VRenderChildren(Scene* pScene)
             }
         }
     }
-    for (auto &node : intersectedNodes) {
-        RenderNode(pScene, node);
+    for (SceneNodeList::iterator node = intersectedNodes.begin(); node != intersectedNodes.end(); ++node) {
+        RenderNode(pScene, *node);
     }
 
     // Render another
@@ -338,7 +344,12 @@ void GridNode::VRenderChildren(Scene* pScene)
 SDL_Rect GridNode::GridIntersection(const SDL_Rect &cameraRect) const {
     const SDL_Point start = WorldToGridPosition(cameraRect.x, cameraRect.y);
     const SDL_Point end = WorldToGridPosition(cameraRect.x + cameraRect.w, cameraRect.y + cameraRect.h);
-    return SDL_Rect{max(start.x - 1, 0), max(start.y - 1, 0), end.x - start.x + 3, end.y - start.y + 3};
+    SDL_Rect intersection;
+    intersection.x = max(start.x - 1, 0);
+    intersection.y = max(start.y - 1, 0);
+    intersection.w = end.x - start.x + 3;
+    intersection.h = end.y - start.y + 3;
+    return intersection;
 }
 
 void GridNode::VOnUpdate(Scene *pScene, uint32 msDiff) {
@@ -352,11 +363,11 @@ void GridNode::VOnUpdate(Scene *pScene, uint32 msDiff) {
     // NOW UPDATE ONLY VISIBLE CELLS IN RANDOM ORDER!!!
     const SDL_Rect intersect = GridIntersection(pCamera->GetCameraRect());
     for (int x = intersect.x; x < intersect.x + intersect.w && x < m_Grid.size(); ++x) {
-        auto &column = m_Grid[x];
+        std::vector<SceneNodeList> &column = m_Grid[x];
         for (int y = intersect.y; y < intersect.y + intersect.h && y < column.size(); ++y) {
-            auto &nodes = column[y];
-            for (auto &node : nodes) {
-                node->VOnUpdate(pScene, msDiff);
+            SceneNodeList &nodes = column[y];
+            for (SceneNodeList::iterator node = nodes.begin(); node != nodes.end(); ++node) {
+                (*node)->VOnUpdate(pScene, msDiff);
             }
         }
     }
@@ -391,10 +402,10 @@ void GridNode::VOnBeforeChildrenModifyPosition(SceneNode *children, const Point 
 
 shared_ptr<ISceneNode> GridNode::RemoveFromGrid(int x, int y, uint32 actorId) {
     if (m_Grid.size() > x) {
-        auto &col = m_Grid[x];
+        std::vector<SceneNodeList> &col = m_Grid[x];
         if (col.size() > y) {
-            auto &cell = col[y];
-            for (auto it = cell.begin(); it != cell.end(); ++it) {
+            SceneNodeList &cell = col[y];
+            for (SceneNodeList::iterator it = cell.begin(); it != cell.end(); ++it) {
                 if ((*it)->VGetProperties()->GetActorId() == actorId) {
                     shared_ptr<ISceneNode> node = *it;
                     it = cell.erase(it);

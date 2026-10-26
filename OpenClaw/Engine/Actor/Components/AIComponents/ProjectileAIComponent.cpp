@@ -30,13 +30,15 @@ ProjectileAIComponent::ProjectileAIComponent()
     m_SourceActorId(INVALID_ACTOR_ID),
     m_DetonationTime(0),
     m_bHasDetonationTime(false),
-    m_NumSparkles(0)
+    m_NumSparkles(0),
+    m_bDestroyAfterAnimLoop(false)
 { }
 
 ProjectileAIComponent::~ProjectileAIComponent()
 {
-    for (const auto &pSparkle : m_PowerupSparkles)
+    for (size_t i = 0; i < m_PowerupSparkles.size(); i++)
     {
+        const StrongActorPtr &pSparkle = m_PowerupSparkles[i];
         shared_ptr<EventData_Destroy_Actor> pEvent(new EventData_Destroy_Actor(pSparkle->GetGUID()));
         IEventMgr::Get()->VQueueEvent(pEvent);
     }

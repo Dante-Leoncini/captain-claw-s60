@@ -2,14 +2,14 @@
 #include "TapRecognizer.h"
 
 Touch_Event TapRecognizer::VGetEvent(SDL_FingerID finger) {
-    auto it = m_Events.find(finger);
+    std::map<SDL_FingerID, std::pair<Touch_TapEvent, EventState::Type> >::iterator it = m_Events.find(finger);
     assert (it != m_Events.end());
     it->second.second = EventState::UP;
-    return Touch_Event{GetId(), TAP, it->second.first};
+    return Touch_Event(GetId(), TAP, it->second.first);
 }
 
-RecognizerState TapRecognizer::VGetState(SDL_FingerID finger) {
-    auto it = m_Events.find(finger);
+RecognizerState::Type TapRecognizer::VGetState(SDL_FingerID finger) {
+    std::map<SDL_FingerID, std::pair<Touch_TapEvent, EventState::Type> >::iterator it = m_Events.find(finger);
     if (it != m_Events.end()) {
         return RecognizerStateByEventState(it->second.second);
     }
@@ -20,21 +20,21 @@ void TapRecognizer::VFingerDetached(SDL_FingerID finger) {
     m_Events.erase(finger);
 }
 
-RecognizerState TapRecognizer::VOnFingerDown(const SDL_TouchFingerEvent &evt) {
-    m_Events[evt.fingerId] = std::make_pair(Touch_TapEvent{evt}, EventState::DOWN);
+RecognizerState::Type TapRecognizer::VOnFingerDown(const SDL_TouchFingerEvent &evt) {
+    m_Events[evt.fingerId] = std::make_pair(Touch_TapEvent(evt), EventState::DOWN);
     return RecognizerStateByEventState(EventState::DOWN);
 }
 
-RecognizerState TapRecognizer::VOnFingerMotion(const SDL_TouchFingerEvent &evt) {
-    auto it = m_Events.find(evt.fingerId);
+RecognizerState::Type TapRecognizer::VOnFingerMotion(const SDL_TouchFingerEvent &evt) {
+    std::map<SDL_FingerID, std::pair<Touch_TapEvent, EventState::Type> >::iterator it = m_Events.find(evt.fingerId);
     if (it != m_Events.end()) {
         return RecognizerStateByEventState(it->second.second);
     }
     return RecognizerState::Failed;
 }
 
-RecognizerState TapRecognizer::VOnFingerUp(const SDL_TouchFingerEvent &evt) {
-    auto it = m_Events.find(evt.fingerId);
+RecognizerState::Type TapRecognizer::VOnFingerUp(const SDL_TouchFingerEvent &evt) {
+    std::map<SDL_FingerID, std::pair<Touch_TapEvent, EventState::Type> >::iterator it = m_Events.find(evt.fingerId);
     if (it != m_Events.end()) {
         it->second.second = EventState::UP_READY;
         return RecognizerStateByEventState(EventState::UP_READY);
@@ -42,7 +42,7 @@ RecognizerState TapRecognizer::VOnFingerUp(const SDL_TouchFingerEvent &evt) {
     return RecognizerState::Failed;
 }
 
-RecognizerState TapRecognizer::RecognizerStateByEventState(TapRecognizer::EventState eventState) {
+RecognizerState::Type TapRecognizer::RecognizerStateByEventState(TapRecognizer::EventState::Type eventState) {
     switch (eventState) {
         case EventState::DOWN:
             return RecognizerState::Recognizing;

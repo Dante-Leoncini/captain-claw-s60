@@ -63,8 +63,9 @@ TiXmlElement* LootComponent::VGenerateXml()
 void LootComponent::VOnHealthBelowZero(DamageType damageType, int sourceActorId)
 {
     bool hadRareTreasure = false;
-    for (PickupType item : m_Loot)
+    for (size_t i = 0; i < m_Loot.size(); i++)
     {
+        PickupType item = m_Loot[i];
         shared_ptr<PositionComponent> pPositionComponent = m_pOwner->GetPositionComponent();
         assert(pPositionComponent);
 

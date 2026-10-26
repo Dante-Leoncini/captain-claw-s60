@@ -119,7 +119,7 @@ enum MenuType
 class Image;
 class ScreenElementMenuPage;
 
-typedef std::map<MenuPage, shared_ptr<ScreenElementMenuPage>> MenuPageMap;
+typedef std::map<MenuPage, shared_ptr<ScreenElementMenuPage> > MenuPageMap;
 
 // This encapsulates menu background and its children (buttons)
 class ScreenElementMenu : public IScreenElement
@@ -166,7 +166,7 @@ private:
 
 class ScreenElementMenuItem;
 
-typedef std::vector<shared_ptr<ScreenElementMenuItem>> MenuItemList;
+typedef std::vector<shared_ptr<ScreenElementMenuItem> > MenuItemList;
 typedef std::map<SDL_Keycode, IEventDataPtr> KeyToEventMap;
 
 // This is menupage like MenuPage_Main, MenuPage_SinglePlayer, etc.
@@ -244,18 +244,18 @@ struct MenuItemImage
 struct MenuItemImageContainer
 {
     std::string name;
-    std::vector<shared_ptr<MenuItemImage>> imageList;
+    std::vector<shared_ptr<MenuItemImage> > imageList;
 };
 */
 
 // This is menu item like button, slider, text, etc.
 class ScreenElementMenuItem : public IScreenElement
 {
-    typedef std::map<MenuItemState, shared_ptr<Image>> MenuItemImageMap;
+    typedef std::map<MenuItemState, shared_ptr<Image> > MenuItemImageMap;
     typedef std::vector<IEventDataPtr> EventList;
     typedef std::map<MenuItemState, EventList> StateChangeEventMap;
     typedef std::map<SDL_Keycode, EventList> KeyToEventMap;
-    //typedef std::vector<shared_ptr<MenuItemImageContainer>> MenuItemImageContainerList;
+    //typedef std::vector<shared_ptr<MenuItemImageContainer> > MenuItemImageContainerList;
 
 public:
     ScreenElementMenuItem(SDL_Renderer* pRenderer);
@@ -276,6 +276,8 @@ public:
     bool Initialize(TiXmlElement* pElem);
 
     std::string GetName() const { return m_Name; }
+    // Some CLAW.REZ releases lack images of newer menu items
+    bool HasMissingImages() const { return m_bHasMissingImages; }
 
     MenuItemState GetState() { return m_State; }
     bool SetState(MenuItemState state);
@@ -292,6 +294,7 @@ private:
     Point m_DefaultPosition;
     Point m_Position;
     bool m_bVisible;
+    bool m_bHasMissingImages;
     MenuItemType m_Type;
 
     EventList m_GeneratedEventList;

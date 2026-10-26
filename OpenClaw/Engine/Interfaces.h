@@ -673,8 +673,8 @@ public:
     virtual bool const operator < (IScreenElement const &other) { return VGetZOrder() < other.VGetZOrder(); }
 };
 
-typedef std::list<std::shared_ptr<IScreenElement>> ScreenElementList;
-typedef std::list<std::shared_ptr<IGameView>> GameViewList;
+typedef std::list<std::shared_ptr<IScreenElement> > ScreenElementList;
+typedef std::list<std::shared_ptr<IGameView> > GameViewList;
 
 class IKeyboardHandler
 {
@@ -693,7 +693,7 @@ public:
 
 class ITouchHandler {
 public:
-    virtual std::vector<std::shared_ptr<AbstractRecognizer>> VRegisterRecognizers() = 0;
+    virtual std::vector<std::shared_ptr<AbstractRecognizer> > VRegisterRecognizers() = 0;
     virtual bool VOnTouch(const Touch_Event &evt) = 0;
 };
 
@@ -711,7 +711,7 @@ public:
     template <class SubClass>
     bool Register(IdType id)
     {
-        auto findIter = _creationFunctions.find(id);
+        typename std::map<IdType, ObjectCreationFunction>::iterator findIter = _creationFunctions.find(id);
         if (findIter == _creationFunctions.end())
         {
             _creationFunctions[id] = &GenericObjectCreationFunction < BaseClass, SubClass >;
@@ -731,7 +731,7 @@ public:
 
     BaseClass* Create(IdType id)
     {
-        auto findIter = _creationFunctions.find(id);
+        typename std::map<IdType, ObjectCreationFunction>::iterator findIter = _creationFunctions.find(id);
         if (findIter != _creationFunctions.end())
         {
             ObjectCreationFunction func = findIter->second;

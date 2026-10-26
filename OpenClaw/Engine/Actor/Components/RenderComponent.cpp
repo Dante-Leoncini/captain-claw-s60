@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <climits>
 
 const char* ActorRenderComponent::g_Name = "ActorRenderComponent";
 const char* TilePlaneRenderComponent::g_Name = "TilePlaneRenderComponent";
@@ -59,7 +60,7 @@ bool BaseRenderComponent::VInit(TiXmlElement* pXmlData)
         std::string imageDirLowercase(imagesPath);
         std::transform(imageDirLowercase.begin(), imageDirLowercase.end(), imageDirLowercase.begin(), (int(*)(int)) std::tolower);
         //LOG("ImageDir: " + imageDir);
-        for (auto iter = matchingPathNames.begin(); iter != matchingPathNames.end(); /*++iter*/)
+        for (std::vector<std::string>::iterator iter = matchingPathNames.begin(); iter != matchingPathNames.end(); /*++iter*/)
         {
             if (!WildcardMatch(imageDirLowercase.c_str(), (*iter).c_str()))
             {
@@ -71,8 +72,9 @@ bool BaseRenderComponent::VInit(TiXmlElement* pXmlData)
             }
         }
 
-        for (std::string& imagePath : matchingPathNames)
+        for (size_t i = 0; i < matchingPathNames.size(); i++)
         {
+            std::string& imagePath = matchingPathNames[i];
             // Only load known image formats
             if (!WildcardMatch("*.pid", imagePath.c_str()))
             {
@@ -279,10 +281,10 @@ bool ActorRenderComponent::VDelegateInit(TiXmlElement* pXmlData)
     {
         ImageMap normalizedImageMap;
         int currImageIdx = 1;
-        for (auto& it : m_ImageMap)
+        for (ImageMap::iterator it = m_ImageMap.begin(); it != m_ImageMap.end(); ++it)
         {
             std::string imageKey = "frame" + Util::ConvertToThreeDigitsString(currImageIdx);
-            normalizedImageMap.insert(std::make_pair(imageKey, it.second));
+            normalizedImageMap.insert(std::make_pair(imageKey, it->second));
             currImageIdx++;
         }
         m_ImageMap.clear();
@@ -311,12 +313,10 @@ SDL_Rect ActorRenderComponent::VGetPositionRect()
 
     Point position = m_pPositionComponent->GetPosition();
 
-    positionRect = {
-            (int)position.GetX() - currentImage->GetWidth() / 2 + currentImage->GetOffsetX(),
-            (int)position.GetY() - currentImage->GetHeight() / 2 + currentImage->GetOffsetY(),
-            currentImage->GetWidth(),
-            currentImage->GetHeight()
-    };
+    positionRect.x = (int)position.GetX() - currentImage->GetWidth() / 2 + currentImage->GetOffsetX();
+    positionRect.y = (int)position.GetY() - currentImage->GetHeight() / 2 + currentImage->GetOffsetY();
+    positionRect.w = currentImage->GetWidth();
+    positionRect.h = currentImage->GetHeight();
 
     return positionRect;
 }
@@ -374,7 +374,7 @@ void ActorRenderComponent::UpdateCurrentImage() {
     }
 
     m_IsCachedImageExpired = false;
-    const auto image = m_ImageMap.find(m_CurrentImageName);
+    const ImageMap::iterator image = m_ImageMap.find(m_CurrentImageName);
     if (m_ImageMap.end() != image)
     {
         m_CachedImage = image->second;
@@ -623,15 +623,34 @@ bool TilePlaneRenderComponent::VDelegateInit(TiXmlElement* pXmlData)
     PROFILE_CPU("PLANE CREATION");
     int32 tileIdx = 0;
 
-    TileList tileList;
-    for (TiXmlElement* pTileNode = pTileElements->FirstChildElement(); 
-        pTileNode != NULL; 
-        pTileNode = pTileNode->NextSiblingElement())
+    // Tiles are either <Tile> elements or one text with all of them separated by spaces
+    std::vector<int32> tileIds;
+    if (const char* pTileText = pTileElements->GetText())
     {
-        std::string tileFileName(pTileNode->GetText());
+        const char* pCursor = pTileText;
+        char* pEnd = NULL;
+        for (long tile = strtol(pCursor, &pEnd, 10); pEnd != pCursor; tile = strtol(pCursor, &pEnd, 10))
+        {
+            tileIds.push_back((int32)tile);
+            pCursor = pEnd;
+        }
+    }
+    else
+    {
+        for (TiXmlElement* pTileNode = pTileElements->FirstChildElement();
+            pTileNode != NULL;
+            pTileNode = pTileNode->NextSiblingElement())
+        {
+            tileIds.push_back(std::stoi(pTileNode->GetText()));
+        }
+    }
 
+    TileList tileList;
+    for (size_t tileIdIdx = 0; tileIdIdx < tileIds.size(); tileIdIdx++)
+    {
         // Temporarily keep track of the tiles stored
-        int32 tileId = std::stoi(tileFileName);
+        int32 tileId = tileIds[tileIdIdx];
+        std::string tileFileName(ToStr(tileId));
         tileList.push_back(tileId);
 
         // Convert to three digits, e.g. "2" -> "002" or "15" -> "015"
@@ -645,7 +664,7 @@ bool TilePlaneRenderComponent::VDelegateInit(TiXmlElement* pXmlData)
             tileFileName = "0" + tileFileName; 
         }
 
-        auto findIt = m_ImageMap.find(tileFileName);
+        ImageMap::iterator findIt = m_ImageMap.find(tileFileName);
         if (findIt != m_ImageMap.end())
         {
             m_TileImageList.push_back(findIt->second.get());
@@ -692,14 +711,17 @@ bool TilePlaneRenderComponent::VDelegateInit(TiXmlElement* pXmlData)
     int planeHeight = m_PlaneProperties.planePixelHeight * 2;
     if (m_PlaneProperties.isWrappedX)
     {
-        planeWidth = INT32_MAX;
+        planeWidth = INT_MAX;
     }
     if (m_PlaneProperties.isWrappedY)
     {
-        planeHeight = INT32_MAX;
+        planeHeight = INT_MAX;
     }
     
-    m_PositionRect = { 0, 0, planeWidth, planeHeight };
+    m_PositionRect.x = 0;
+    m_PositionRect.y = 0;
+    m_PositionRect.w = planeWidth;
+    m_PositionRect.h = planeHeight;
 
     return true;
 }
@@ -787,7 +809,8 @@ bool HUDRenderComponent::VDelegateInit(TiXmlElement* pXmlData)
 SDL_Rect HUDRenderComponent::VGetPositionRect()
 {
     // HACK: Always visible
-    return { 0, 0, 1000000, 1000000 };
+    SDL_Rect positionRect = { 0, 0, 1000000, 1000000 };
+    return positionRect;
 }
 
 shared_ptr<SceneNode> HUDRenderComponent::VCreateSceneNode()

@@ -37,7 +37,7 @@ private:
     int m_SourceActorId;
     int m_DetonationTime;
     int m_NumSparkles;
-    bool m_bDestroyAfterAnimLoop {false};
+    bool m_bDestroyAfterAnimLoop;
 
     // Internal state
     shared_ptr<IGamePhysics> m_pPhysics;

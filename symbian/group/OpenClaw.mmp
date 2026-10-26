@@ -1,0 +1,49 @@
+// OpenClaw for S60 3rd Edition (Nokia N95): the S60 application, the sdl2lite layer and the
+// game libraries. The original game data (CLAW.REZ) is not included: it goes to E:\data\claw\.
+TARGET          OpenClaw.exe
+TARGETTYPE      exe
+UID             0x100039CE 0xE0C1A75A
+VENDORID        0
+
+EPOCSTACKSIZE   0x14000
+EPOCHEAPSIZE    0x100000 0x6000000
+
+CAPABILITY      NONE
+
+//#define MMP_NO_MIDI
+
+#include "common.mmh"
+
+USERINCLUDE     ..\inc
+USERINCLUDE     ..\sdl2lite\src
+USERINCLUDE     ..\..\libwap
+SYSTEMINCLUDE   ..\sdl2lite\include
+
+SOURCEPATH      ..\src
+SOURCE          OpenClawApp.cpp platform_symbian.cpp newdel.cpp
+
+SOURCEPATH      ..\sdl2lite\src
+SOURCE          sdl_core.cpp sdl_render.cpp sdl_image.cpp sdl_mixer.cpp sdl_ttf.cpp sdl_gfx.cpp
+
+SOURCEPATH      ..\data
+START RESOURCE  OpenClaw.rss
+HEADER
+TARGETPATH      \resource\apps
+LANG            SC
+END
+START RESOURCE  OpenClaw_reg.rss
+TARGETPATH      \private\10003a3f\import\apps
+END
+
+STATICLIBRARY   openclaw_game.lib openclaw_libwap.lib
+
+LIBRARY         euser.lib apparc.lib cone.lib eikcore.lib avkon.lib ws32.lib efsrv.lib hal.lib
+LIBRARY         libgles_cm.lib
+LIBRARY         mediaclientaudiostream.lib
+LIBRARY         remconcoreapi.lib remconinterfacebase.lib   // volume keys
+#ifdef MMP_NO_MIDI
+MACRO           OPENCLAW_NO_MIDI
+#else
+LIBRARY         midiclient.lib
+#endif
+LIBRARY         libc.lib libm.lib libstdcpp.lib

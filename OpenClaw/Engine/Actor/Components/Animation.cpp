@@ -25,7 +25,7 @@ Animation::~Animation()
 
 std::shared_ptr<Animation> Animation::CreateAnimation(WapAni* wapAni, const char* animationName, const char* resourcePath, AnimationComponent* owner)
 {
-    std::shared_ptr<Animation> animation{new Animation()};
+    std::shared_ptr<Animation> animation(new Animation());
     if (!animation->Initialize(wapAni, animationName, resourcePath, owner))
     {
         return nullptr;
@@ -36,7 +36,7 @@ std::shared_ptr<Animation> Animation::CreateAnimation(WapAni* wapAni, const char
 
 std::shared_ptr<Animation> Animation::CreateAnimation(const std::vector<AnimationFrame> &animFrames, const char* animName, AnimationComponent* owner)
 {
-    std::shared_ptr<Animation> animation{new Animation()};
+    std::shared_ptr<Animation> animation(new Animation());
     if (!animation->Initialize(animFrames, animName, owner))
     {
         return nullptr;
@@ -47,7 +47,7 @@ std::shared_ptr<Animation> Animation::CreateAnimation(const std::vector<Animatio
 
 std::shared_ptr<Animation> Animation::CreateAnimation(int numAnimFrames, int animFrameTime, const char* animName, AnimationComponent* owner)
 {
-    std::shared_ptr<Animation> animation{new Animation()};
+    std::shared_ptr<Animation> animation(new Animation());
     if (!animation->Initialize(numAnimFrames, animFrameTime, animName, owner))
     {
         return nullptr;

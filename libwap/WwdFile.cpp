@@ -7,7 +7,7 @@
 #include <exception>
 
 #include "libwap.h"
-#include "IO.h"
+#include "WapStream.h"
 #include "Miniz.h"
 #include "Util.h"
 
@@ -15,7 +15,10 @@ const uint32_t EXPECTED_HEADER_SIZE = 1524;
 
 static void ReadRect(InputStream &stream, WwdRect &rect) 
 {
-    stream.read(rect.left, rect.top, rect.right, rect.bottom);
+    stream.read(rect.left);
+    stream.read(rect.top);
+    stream.read(rect.right);
+    stream.read(rect.bottom);
 }
 
 static void ReadPlaneTiles(WwdPlane* plane, InputStream& inputStream)
@@ -72,25 +75,25 @@ static void ReadPlaneObjects(WwdPlane* plane, InputStream& inputStream)
 
         for (i = 0; i < plane->objectsCount; i++)
         {
-            inputStream.read(plane->objects[i].id,
-                plane->objects[i].nameLength,
-                plane->objects[i].logicLength,
-                plane->objects[i].imageSetLength,
-                plane->objects[i].soundLength,
-                plane->objects[i].x,
-                plane->objects[i].y,
-                plane->objects[i].z,
-                plane->objects[i].i,
-                plane->objects[i].addFlags,
-                plane->objects[i].dynamicFlags,
-                plane->objects[i].drawFlags,
-                plane->objects[i].userFlags,
-                plane->objects[i].score,
-                plane->objects[i].points,
-                plane->objects[i].powerup,
-                plane->objects[i].damage,
-                plane->objects[i].smarts,
-                plane->objects[i].health);
+            inputStream.read(plane->objects[i].id);
+            inputStream.read(plane->objects[i].nameLength);
+            inputStream.read(plane->objects[i].logicLength);
+            inputStream.read(plane->objects[i].imageSetLength);
+            inputStream.read(plane->objects[i].soundLength);
+            inputStream.read(plane->objects[i].x);
+            inputStream.read(plane->objects[i].y);
+            inputStream.read(plane->objects[i].z);
+            inputStream.read(plane->objects[i].i);
+            inputStream.read(plane->objects[i].addFlags);
+            inputStream.read(plane->objects[i].dynamicFlags);
+            inputStream.read(plane->objects[i].drawFlags);
+            inputStream.read(plane->objects[i].userFlags);
+            inputStream.read(plane->objects[i].score);
+            inputStream.read(plane->objects[i].points);
+            inputStream.read(plane->objects[i].powerup);
+            inputStream.read(plane->objects[i].damage);
+            inputStream.read(plane->objects[i].smarts);
+            inputStream.read(plane->objects[i].health);
 
             ReadRect(inputStream, plane->objects[i].moveRect);
             ReadRect(inputStream, plane->objects[i].hitRect);
@@ -99,34 +102,34 @@ static void ReadPlaneObjects(WwdPlane* plane, InputStream& inputStream)
             ReadRect(inputStream, plane->objects[i].userRect1);
             ReadRect(inputStream, plane->objects[i].userRect2);
 
-            inputStream.read(plane->objects[i].userValue1,
-                plane->objects[i].userValue2,
-                plane->objects[i].userValue3,
-                plane->objects[i].userValue4,
-                plane->objects[i].userValue5,
-                plane->objects[i].userValue6,
-                plane->objects[i].userValue7,
-                plane->objects[i].userValue8,
-                plane->objects[i].minX,
-                plane->objects[i].minY,
-                plane->objects[i].maxX,
-                plane->objects[i].maxY,
-                plane->objects[i].speedX,
-                plane->objects[i].speedY,
-                plane->objects[i].tweakX,
-                plane->objects[i].tweakY,
-                plane->objects[i].counter,
-                plane->objects[i].speed,
-                plane->objects[i].width,
-                plane->objects[i].height,
-                plane->objects[i].direction,
-                plane->objects[i].faceDir,
-                plane->objects[i].timeDelay,
-                plane->objects[i].frameDelay,
-                plane->objects[i].objectType,
-                plane->objects[i].hitTypeFlags,
-                plane->objects[i].moveResX,
-                plane->objects[i].moveResY);
+            inputStream.read(plane->objects[i].userValue1);
+            inputStream.read(plane->objects[i].userValue2);
+            inputStream.read(plane->objects[i].userValue3);
+            inputStream.read(plane->objects[i].userValue4);
+            inputStream.read(plane->objects[i].userValue5);
+            inputStream.read(plane->objects[i].userValue6);
+            inputStream.read(plane->objects[i].userValue7);
+            inputStream.read(plane->objects[i].userValue8);
+            inputStream.read(plane->objects[i].minX);
+            inputStream.read(plane->objects[i].minY);
+            inputStream.read(plane->objects[i].maxX);
+            inputStream.read(plane->objects[i].maxY);
+            inputStream.read(plane->objects[i].speedX);
+            inputStream.read(plane->objects[i].speedY);
+            inputStream.read(plane->objects[i].tweakX);
+            inputStream.read(plane->objects[i].tweakY);
+            inputStream.read(plane->objects[i].counter);
+            inputStream.read(plane->objects[i].speed);
+            inputStream.read(plane->objects[i].width);
+            inputStream.read(plane->objects[i].height);
+            inputStream.read(plane->objects[i].direction);
+            inputStream.read(plane->objects[i].faceDir);
+            inputStream.read(plane->objects[i].timeDelay);
+            inputStream.read(plane->objects[i].frameDelay);
+            inputStream.read(plane->objects[i].objectType);
+            inputStream.read(plane->objects[i].hitTypeFlags);
+            inputStream.read(plane->objects[i].moveResX);
+            inputStream.read(plane->objects[i].moveResY);
 
             plane->objects[i].name = ReadAndAllocateString(inputStream, plane->objects[i].nameLength);
             plane->objects[i].logic = ReadAndAllocateString(inputStream, plane->objects[i].logicLength);
@@ -151,36 +154,36 @@ static void ReadPlanes(WapWwd* wapWwd, InputStream& inputStream)
     for (i = 0; i < wapWwd->planesCount; i++)
     {
         // Set default values
-        wapWwd->planes[i] = { 0 };
+        wapWwd->planes[i] = WwdPlane();
 
         /********************** PLANE'S PROPERTIES **********************/
 
         // Read plane's properties
-        inputStream.read(wapWwd->planes[i].properties.signature,
-            wapWwd->planes[i].properties.null0,
-            wapWwd->planes[i].properties.flags,
-            wapWwd->planes[i].properties.null1,
-            wapWwd->planes[i].properties.name,
-            wapWwd->planes[i].properties.pixelWidth,
-            wapWwd->planes[i].properties.pixelHeight,
-            wapWwd->planes[i].properties.tilePixelWidth,
-            wapWwd->planes[i].properties.tilePixelHeight,
-            wapWwd->planes[i].properties.tilesOnAxisX,
-            wapWwd->planes[i].properties.tilesOnAxisY,
-            wapWwd->planes[i].properties.null2,
-            wapWwd->planes[i].properties.null3,
-            wapWwd->planes[i].properties.movementPercentX,
-            wapWwd->planes[i].properties.movementPercentY,
-            wapWwd->planes[i].properties.fillColor,
-            wapWwd->planes[i].properties.imageSetsCount,
-            wapWwd->planes[i].properties.objectsCount,
-            wapWwd->planes[i].properties.tilesOffset,
-            wapWwd->planes[i].properties.imageSetsOffset,
-            wapWwd->planes[i].properties.objectsOffset,
-            wapWwd->planes[i].properties.coordZ,
-            wapWwd->planes[i].properties.null4,
-            wapWwd->planes[i].properties.null5,
-            wapWwd->planes[i].properties.null6);
+        inputStream.read(wapWwd->planes[i].properties.signature);
+        inputStream.read(wapWwd->planes[i].properties.null0);
+        inputStream.read(wapWwd->planes[i].properties.flags);
+        inputStream.read(wapWwd->planes[i].properties.null1);
+        inputStream.read(wapWwd->planes[i].properties.name);
+        inputStream.read(wapWwd->planes[i].properties.pixelWidth);
+        inputStream.read(wapWwd->planes[i].properties.pixelHeight);
+        inputStream.read(wapWwd->planes[i].properties.tilePixelWidth);
+        inputStream.read(wapWwd->planes[i].properties.tilePixelHeight);
+        inputStream.read(wapWwd->planes[i].properties.tilesOnAxisX);
+        inputStream.read(wapWwd->planes[i].properties.tilesOnAxisY);
+        inputStream.read(wapWwd->planes[i].properties.null2);
+        inputStream.read(wapWwd->planes[i].properties.null3);
+        inputStream.read(wapWwd->planes[i].properties.movementPercentX);
+        inputStream.read(wapWwd->planes[i].properties.movementPercentY);
+        inputStream.read(wapWwd->planes[i].properties.fillColor);
+        inputStream.read(wapWwd->planes[i].properties.imageSetsCount);
+        inputStream.read(wapWwd->planes[i].properties.objectsCount);
+        inputStream.read(wapWwd->planes[i].properties.tilesOffset);
+        inputStream.read(wapWwd->planes[i].properties.imageSetsOffset);
+        inputStream.read(wapWwd->planes[i].properties.objectsOffset);
+        inputStream.read(wapWwd->planes[i].properties.coordZ);
+        inputStream.read(wapWwd->planes[i].properties.null4);
+        inputStream.read(wapWwd->planes[i].properties.null5);
+        inputStream.read(wapWwd->planes[i].properties.null6);
 
         // Data duplication for sanity reasons
         wapWwd->planes[i].tilesCount = wapWwd->planes[i].properties.tilesOnAxisX * wapWwd->planes[i].properties.tilesOnAxisY;
@@ -213,17 +216,24 @@ void ReadTileDescriptions(WapWwd* wapWwd, InputStream& inputStream)
     inputStream.seek(wapWwd->properties.tileDescriptionsOffset);
 
     // Read count of tile descriptions along with junk values
-    inputStream.read(32, 0, wapWwd->tileDescriptionsCount, 0, 0, 0, 0, 0);
+    inputStream.read(32);
+    inputStream.read(0);
+    inputStream.read(wapWwd->tileDescriptionsCount);
+    inputStream.read(0);
+    inputStream.read(0);
+    inputStream.read(0);
+    inputStream.read(0);
+    inputStream.read(0);
 
     // Allocate space for WWD tile descriptions
     wapWwd->tileDescriptions = new WwdTileDescription[wapWwd->tileDescriptionsCount];
 
     for (i = 0; i < wapWwd->tileDescriptionsCount; i++)
     {
-        inputStream.read(wapWwd->tileDescriptions[i].type,
-            wapWwd->tileDescriptions[i].unk0,
-            wapWwd->tileDescriptions[i].width,
-            wapWwd->tileDescriptions[i].height);
+        inputStream.read(wapWwd->tileDescriptions[i].type);
+        inputStream.read(wapWwd->tileDescriptions[i].unk0);
+        inputStream.read(wapWwd->tileDescriptions[i].width);
+        inputStream.read(wapWwd->tileDescriptions[i].height);
 
         if (wapWwd->tileDescriptions[i].type == WAP_TILE_TYPE_SINGLE)
         {
@@ -231,8 +241,8 @@ void ReadTileDescriptions(WapWwd* wapWwd, InputStream& inputStream)
         }
         else
         {
-            inputStream.read(wapWwd->tileDescriptions[i].outsideAttrib,
-                wapWwd->tileDescriptions[i].insideAttrib);
+            inputStream.read(wapWwd->tileDescriptions[i].outsideAttrib);
+            inputStream.read(wapWwd->tileDescriptions[i].insideAttrib);
 
             ReadRect(inputStream, wapWwd->tileDescriptions[i].rect);
         }
@@ -253,7 +263,7 @@ WapWwd* WAP_TryWwdLoadFromImpl(char* data, uint32_t length)
     wapWwd = new WapWwd;
 
     // Set default values
-    (*wapWwd) = { 0 };
+    (*wapWwd) = WapWwd();
 
     InputStream wwdFileStream(data, length);
     wwdFileStream.read(wapWwd->properties.wwdSignature);
@@ -265,33 +275,33 @@ WapWwd* WAP_TryWwdLoadFromImpl(char* data, uint32_t length)
         return NULL;
     }
 
-    wwdFileStream.read(wapWwd->properties.null0,
-        wapWwd->properties.flags,
-        wapWwd->properties.null1,
-        wapWwd->properties.levelName,
-        wapWwd->properties.author,
-        wapWwd->properties.birth,
-        wapWwd->properties.rezFile,
-        wapWwd->properties.imageDirectoryPath,
-        wapWwd->properties.rezPalettePath,
-        wapWwd->properties.startX,
-        wapWwd->properties.startY,
-        wapWwd->properties.null2,
-        wapWwd->properties.numPlanes,
-        wapWwd->properties.planesOffset,
-        wapWwd->properties.tileDescriptionsOffset,
-        wapWwd->properties.mainBlockLength,
-        wapWwd->properties.checksum,
-        wapWwd->properties.null3,
-        wapWwd->properties.launchApp,
-        wapWwd->properties.imageSet1,
-        wapWwd->properties.imageSet2,
-        wapWwd->properties.imageSet3,
-        wapWwd->properties.imageSet4,
-        wapWwd->properties.prefix1,
-        wapWwd->properties.prefix2,
-        wapWwd->properties.prefix3,
-        wapWwd->properties.prefix4);
+    wwdFileStream.read(wapWwd->properties.null0);
+    wwdFileStream.read(wapWwd->properties.flags);
+    wwdFileStream.read(wapWwd->properties.null1);
+    wwdFileStream.read(wapWwd->properties.levelName);
+    wwdFileStream.read(wapWwd->properties.author);
+    wwdFileStream.read(wapWwd->properties.birth);
+    wwdFileStream.read(wapWwd->properties.rezFile);
+    wwdFileStream.read(wapWwd->properties.imageDirectoryPath);
+    wwdFileStream.read(wapWwd->properties.rezPalettePath);
+    wwdFileStream.read(wapWwd->properties.startX);
+    wwdFileStream.read(wapWwd->properties.startY);
+    wwdFileStream.read(wapWwd->properties.null2);
+    wwdFileStream.read(wapWwd->properties.numPlanes);
+    wwdFileStream.read(wapWwd->properties.planesOffset);
+    wwdFileStream.read(wapWwd->properties.tileDescriptionsOffset);
+    wwdFileStream.read(wapWwd->properties.mainBlockLength);
+    wwdFileStream.read(wapWwd->properties.checksum);
+    wwdFileStream.read(wapWwd->properties.null3);
+    wwdFileStream.read(wapWwd->properties.launchApp);
+    wwdFileStream.read(wapWwd->properties.imageSet1);
+    wwdFileStream.read(wapWwd->properties.imageSet2);
+    wwdFileStream.read(wapWwd->properties.imageSet3);
+    wwdFileStream.read(wapWwd->properties.imageSet4);
+    wwdFileStream.read(wapWwd->properties.prefix1);
+    wwdFileStream.read(wapWwd->properties.prefix2);
+    wwdFileStream.read(wapWwd->properties.prefix3);
+    wwdFileStream.read(wapWwd->properties.prefix4);
 
     // Data duplication for sanity reasons
     wapWwd->planesCount = wapWwd->properties.numPlanes;
@@ -302,8 +312,8 @@ WapWwd* WAP_TryWwdLoadFromImpl(char* data, uint32_t length)
 
     // Uncompressed WWD file payload info
     std::vector<char> decompressedMainBlockVector(wapWwd->properties.planesOffset + wapWwd->properties.mainBlockLength);
-    memcpy(decompressedMainBlockVector.data(), data, wapWwd->properties.planesOffset);
-    char* decompressedMainBlock = decompressedMainBlockVector.data() + wapWwd->properties.planesOffset;
+    memcpy(&decompressedMainBlockVector[0], data, wapWwd->properties.planesOffset);
+    char* decompressedMainBlock = &decompressedMainBlockVector[0] + wapWwd->properties.planesOffset;
 
     // Inflate compressed WWD file payload
     int32_t ret = uncompress((Bytef*)decompressedMainBlock, (uLong*)(&(wapWwd->properties.mainBlockLength)),
@@ -316,7 +326,7 @@ WapWwd* WAP_TryWwdLoadFromImpl(char* data, uint32_t length)
     }
 
     // Create new file stream from inflated WWD file payload
-    InputStream wwdFileStreamInflated(decompressedMainBlockVector.data(), decompressedMainBlockVector.size());
+    InputStream wwdFileStreamInflated(&decompressedMainBlockVector[0], decompressedMainBlockVector.size());
 
     /**************************************************************************************/
     /***************************** READ LEVEL INFORMATIONS ********************************/
@@ -362,7 +372,7 @@ WapWwd* WAP_WwdLoadFromFile(char* wwdFilePath)
         return NULL;
     }
 
-    return WAP_WwdLoadFromData(wwdFileContents.data(), wwdFileContents.size());
+    return WAP_WwdLoadFromData((wwdFileContents.empty() ? NULL : &wwdFileContents[0]), wwdFileContents.size());
 }
 
 WapWwd* WAP_WwdLoadFromRezFile(RezFile* rezFile)

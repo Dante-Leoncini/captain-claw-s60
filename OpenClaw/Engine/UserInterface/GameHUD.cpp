@@ -30,16 +30,19 @@ ScreenElementHUD::ScreenElementHUD()
     m_IsVisible(true),
     m_pFPSTexture(NULL),
     m_pPositionTexture(NULL),
-    m_pBossBarTexture(NULL)
+    m_pBossBarTexture(NULL),
+    m_MessageTimeLeft(0)
 {
     IEventMgr::Get()->VAddListener(MakeDelegate(this, &ScreenElementHUD::BossHealthChangedDelegate), EventData_Boss_Health_Changed::sk_EventType);
     IEventMgr::Get()->VAddListener(MakeDelegate(this, &ScreenElementHUD::BossFightEndedDelegate), EventData_Boss_Fight_Ended::sk_EventType);
+    IEventMgr::Get()->VAddListener(MakeDelegate(this, &ScreenElementHUD::CheckpointReachedDelegate), EventData_Checkpoint_Reached::sk_EventType);
 }
 
 ScreenElementHUD::~ScreenElementHUD()
 {
     IEventMgr::Get()->VRemoveListener(MakeDelegate(this, &ScreenElementHUD::BossHealthChangedDelegate), EventData_Boss_Health_Changed::sk_EventType);
     IEventMgr::Get()->VRemoveListener(MakeDelegate(this, &ScreenElementHUD::BossFightEndedDelegate), EventData_Boss_Fight_Ended::sk_EventType);
+    IEventMgr::Get()->VRemoveListener(MakeDelegate(this, &ScreenElementHUD::CheckpointReachedDelegate), EventData_Checkpoint_Reached::sk_EventType);
 
     m_HUDElementsMap.clear();
 
@@ -90,6 +93,7 @@ void ScreenElementHUD::VOnLostDevice()
 
 void ScreenElementHUD::VOnRender(uint32 msDiff)
 {
+    Point gameScale = g_pApp->BeginHUDScale();
     Point scale = g_pApp->GetScale();
     int cameraWidth = m_pCamera->GetWidth();
 
@@ -189,10 +193,88 @@ void ScreenElementHUD::VOnRender(uint32 msDiff)
         renderRect.y = pos.y;
         SDL_RenderCopy(m_pRenderer, m_pBossBarTexture, NULL, &renderRect);
     }
+
+    if (m_MessageTimeLeft > 0)
+    {
+        const int spaceWidth = 6;
+        int textWidth = 0;
+        for (size_t i = 0; i < m_MessageGlyphs.size(); i++)
+        {
+            textWidth += m_MessageGlyphs[i] ? m_MessageGlyphs[i]->GetWidth() + 1 : spaceWidth;
+        }
+
+        int x = (int)(cameraWidth / scale.x / 2) - textWidth / 2;
+        int y = (int)(m_pCamera->GetHeight() / scale.y / 3);
+        for (size_t i = 0; i < m_MessageGlyphs.size(); i++)
+        {
+            if (!m_MessageGlyphs[i])
+            {
+                x += spaceWidth;
+                continue;
+            }
+            SDL_Rect renderRect = { x, y, m_MessageGlyphs[i]->GetWidth(), m_MessageGlyphs[i]->GetHeight() };
+            SDL_RenderCopy(m_pRenderer, m_MessageGlyphs[i]->GetTexture(), NULL, &renderRect);
+            x += m_MessageGlyphs[i]->GetWidth() + 1;
+        }
+    }
+
+    g_pApp->SetScale(gameScale);
+}
+
+void ScreenElementHUD::ShowMessage(const std::string& text, uint32 durationMs)
+{
+    // Glyph files: 0 is '-', 1..26 'A'..'Z', 27..36 '0'..'9', then punctuation
+    static const char* punctuation = "''!?=<>()[]@#$%^&*";
+
+    m_MessageGlyphs.clear();
+    for (size_t i = 0; i < text.size(); i++)
+    {
+        char c = (char)toupper((unsigned char)text[i]);
+        int glyph = -1;
+        if (c >= 'A' && c <= 'Z')
+        {
+            glyph = 1 + (c - 'A');
+        }
+        else if (c >= '0' && c <= '9')
+        {
+            glyph = 27 + (c - '0');
+        }
+        else if (c == '-')
+        {
+            glyph = 0;
+        }
+        else if (const char* pFound = strchr(punctuation + 1, c))
+        {
+            glyph = 37 + (int)(pFound - punctuation);
+        }
+
+        shared_ptr<Image> pGlyph;
+        if (glyph >= 0)
+        {
+            pGlyph = PidResourceLoader::LoadAndReturnImage(("/game/images/font/df" + ToStr(glyph) + ".pid").c_str(),
+                g_pApp->GetCurrentPalette());
+        }
+        m_MessageGlyphs.push_back(pGlyph);
+    }
+    m_MessageTimeLeft = (int)durationMs;
+}
+
+void ScreenElementHUD::CheckpointReachedDelegate(IEventDataPtr pEvent)
+{
+    shared_ptr<EventData_Checkpoint_Reached> pCastEventData = static_pointer_cast<EventData_Checkpoint_Reached>(pEvent);
+    if (pCastEventData->IsSaveCheckpoint() && !g_pApp->GetGlobalOptions()->gameSavedMessage.empty())
+    {
+        ShowMessage(g_pApp->GetGlobalOptions()->gameSavedMessage, 3000);
+    }
 }
 
 void ScreenElementHUD::VOnUpdate(uint32 msDiff)
 {
+    if (m_MessageTimeLeft > 0)
+    {
+        m_MessageTimeLeft -= (int)msDiff;
+    }
+
     static int msAccumulation = 0;
     static int framesAccumulation = 0;
 
@@ -292,7 +374,8 @@ void ScreenElementHUD::UpdateFPS(uint32 newFPS)
     }
 
     std::string fpsString = "FPS: " + ToStr(newFPS);
-    SDL_Surface* pFPSSurface = TTF_RenderText_Blended(g_pApp->GetConsoleFont(), fpsString.c_str(), { 255, 255, 255, 255 });
+    SDL_Color fpsColor = { 255, 255, 255, 255 };
+    SDL_Surface* pFPSSurface = TTF_RenderText_Blended(g_pApp->GetConsoleFont(), fpsString.c_str(), fpsColor);
     m_pFPSTexture = SDL_CreateTextureFromSurface(m_pRenderer, pFPSSurface);
     SDL_FreeSurface(pFPSSurface);
 }
@@ -318,14 +401,15 @@ void ScreenElementHUD::UpdateCameraPosition()
     std::string positionString = "Position: [X = " + ToStr((int)cameraCenter.x) +
         ", Y = " + ToStr((int)cameraCenter.y) + "]";
 
-    SDL_Surface* pPositionSurface = TTF_RenderText_Blended(g_pApp->GetConsoleFont(), positionString.c_str(), { 255, 255, 255, 255 });
+    SDL_Color positionColor = { 255, 255, 255, 255 };
+    SDL_Surface* pPositionSurface = TTF_RenderText_Blended(g_pApp->GetConsoleFont(), positionString.c_str(), positionColor);
     m_pPositionTexture = SDL_CreateTextureFromSurface(m_pRenderer, pPositionSurface);
     SDL_FreeSurface(pPositionSurface);
 }
 
 bool ScreenElementHUD::SetElementVisible(const std::string& element, bool visible)
 {
-    auto iter = m_HUDElementsMap.find(element);
+    HUDElementsMap::iterator iter = m_HUDElementsMap.find(element);
     if (iter != m_HUDElementsMap.end())
     {
         iter->second->SetVisible(visible);
@@ -337,7 +421,7 @@ bool ScreenElementHUD::SetElementVisible(const std::string& element, bool visibl
 
 bool ScreenElementHUD::IsElementVisible(const std::string& element)
 {
-    auto iter = m_HUDElementsMap.find(element);
+    HUDElementsMap::iterator iter = m_HUDElementsMap.find(element);
     if (iter != m_HUDElementsMap.end())
     {
         return iter->second->IsVisible(NULL);

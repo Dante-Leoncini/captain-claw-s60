@@ -5,6 +5,10 @@
 #include "../Graphics2D/Image.h"
 #include "../GameApp/BaseGameApp.h"
 
+#ifndef INT32_MAX
+#define INT32_MAX 0x7fffffff
+#endif
+
 SDL2TilePlaneSceneNode::SDL2TilePlaneSceneNode(const uint32 actorId,
     BaseRenderComponent* pRenderComponent,
     RenderPass renderPass,

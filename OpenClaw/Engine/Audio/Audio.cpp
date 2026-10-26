@@ -8,7 +8,7 @@
 
 #include <iostream>
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(SDL2LITE)
 #include <Windows.h>
 #include "../../../MidiProc/midiproc.h"
 #endif
@@ -86,7 +86,7 @@ bool Audio::Initialize(const GameOptions& config)
     m_bSoundOn = config.soundOn;
     m_bMusicOn = config.musicOn;
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(SDL2LITE)
     m_bIsMidiRpcInitialized = InitializeMidiRPC(config.midiRpcServerPath);
     if (!m_bIsMidiRpcInitialized)
     {
@@ -107,7 +107,7 @@ bool Audio::Initialize(const GameOptions& config)
 
 void Audio::Terminate()
 {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(SDL2LITE)
     TerminateMidiRPC();
 #endif //_WIN32
 }
@@ -132,7 +132,7 @@ static int SetupPlayMusicThread(void* pData)
 {
     _MusicInfo* pMusicInfo = (_MusicInfo*)pData;
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(SDL2LITE)
     RpcTryExcept
     {
         MidiRPC_PrepareNewSong();
@@ -188,7 +188,7 @@ void Audio::PlayMusic(const char* musicData, size_t musicSize, bool looping)
 
 void Audio::PauseMusic()
 {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(SDL2LITE)
     RpcTryExcept
     {
         MidiRPC_PauseSong();
@@ -205,7 +205,7 @@ void Audio::PauseMusic()
 
 void Audio::ResumeMusic()
 {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(SDL2LITE)
     RpcTryExcept
     {
         MidiRPC_ResumeSong();
@@ -223,7 +223,7 @@ void Audio::ResumeMusic()
 
 void Audio::StopMusic()
 {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(SDL2LITE)
     RpcTryExcept
     {
         MidiRPC_StopSong();
@@ -248,7 +248,7 @@ void Audio::SetMusicVolume(int volumePercentage)
     }
     m_MusicVolume = (int)((((float)volumePercentage) / 100.0f) * (float)MIX_MAX_VOLUME);
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(SDL2LITE)
     RpcTryExcept
     {
         MidiRPC_ChangeVolume(m_MusicVolume);
@@ -347,7 +347,7 @@ void Audio::StopAllSounds()
 void Audio::PauseAllSounds()
 {
     Mix_Pause(-1);
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(SDL2LITE)
     MidiRPC_PauseSong();
 #endif //_WIN32
 }
@@ -355,7 +355,7 @@ void Audio::PauseAllSounds()
 void Audio::ResumeAllSounds()
 {
     Mix_Resume(-1);
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(SDL2LITE)
     MidiRPC_ResumeSong();
 #endif //_WIN32
 }
@@ -399,7 +399,7 @@ void Audio::SetMusicActive(bool active)
     m_bMusicOn = active; 
 }
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(SDL2LITE)
 //############################################
 //############## MIDI RPC ####################
 //############################################

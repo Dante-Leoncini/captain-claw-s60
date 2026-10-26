@@ -8,6 +8,8 @@
 #include "../Resource/Loaders/WavLoader.h"
 #include "../Resource/Loaders/XmlLoader.h"
 #include "../Util/PrimeSearch.h"
+#include "../Actor/Components/PositionComponent.h"
+#include "../Actor/Components/RenderComponent.h"
 #include "ScoreScreen/EndLevelScoreScreen.h"
 
 const uint32 g_InvalidGameViewId = 0xFFFFFFFF;
@@ -35,7 +37,7 @@ HumanView::HumanView(SDL_Renderer* renderer)
         //m_pConsole = unique_ptr<Console>(new Console(g_pApp->GetWindowSize().x, g_pApp->GetWindowSize().y / 2,
             //g_pApp->GetConsoleFont(), renderer, "console02.tga"));
 
-        m_pConsole = unique_ptr<Console>(new Console(g_pApp->GetConsoleConfig(), renderer, g_pApp->GetWindow()));
+        m_pConsole.reset(new Console(g_pApp->GetConsoleConfig(), renderer, g_pApp->GetWindow()));
     }
 }
 
@@ -88,8 +90,9 @@ void HumanView::VOnRender(uint32 msDiff)
         // Sort screen elements
         m_ScreenElements.sort(SortBy_SharedPtr_Content<IScreenElement>());
 
-        for (shared_ptr<IScreenElement>& screenElement : m_ScreenElements)
+        for (ScreenElementList::iterator it = m_ScreenElements.begin(); it != m_ScreenElements.end(); ++it)
         {
+            shared_ptr<IScreenElement>& screenElement = *it;
             if (screenElement->VIsVisible())
             {
                 screenElement->VOnRender(msDiff);
@@ -103,6 +106,7 @@ void HumanView::VOnRender(uint32 msDiff)
 
         if (!m_bPostponeRenderPresent)
         {
+            PROFILE_FRAME_SECTION(FrameSection_Present);
             SDL_RenderPresent(renderer);
         }
     }
@@ -114,8 +118,9 @@ void HumanView::VOnUpdate(uint32 msDiff)
 
     m_pConsole->OnUpdate(msDiff);
 
-    for (shared_ptr<IScreenElement> &element : m_ScreenElements)
+    for (ScreenElementList::iterator it = m_ScreenElements.begin(); it != m_ScreenElements.end(); ++it)
     {
+        shared_ptr<IScreenElement> &element = *it;
         element->VOnUpdate(msDiff);
     }
 }
@@ -670,6 +675,9 @@ void HumanView::LoadGameDelegate(IEventDataPtr pEventData)
         int levelNumber = pCastEventData->GetLevelNumber();
         int checkpointNumber = pCastEventData->GetCheckpointNumber();
 
+        // The menu goes to black first
+        Util::FadeScreen(&HumanView::DrawFrameWithoutPresent, this, 0, 255, 400);
+
         // Reset Graphical representation of level
         m_ScreenElements.clear();
         m_pMenu.reset();
@@ -919,11 +927,8 @@ void DeathFadeInOutProcess::VOnInit()
     shared_ptr<CameraNode> pCamera = g_pApp->GetHumanView()->GetCamera();
     Point cameraPos = pCamera->GetPosition();
 
+    // (camera and drawing both in game pixels: no scale to apply)
     m_Epicenter.Set(m_Epicenter.x - cameraPos.x, m_Epicenter.y - cameraPos.y);
-
-    // Apply scale
-    Point scale = g_pApp->GetScale();
-    m_Epicenter.Set(m_Epicenter.x / scale.x, m_Epicenter.y / scale.y);
 
     // Stop game logic update during fade in/out
     g_pApp->GetGameLogic()->SetRunning(false);
@@ -931,6 +936,12 @@ void DeathFadeInOutProcess::VOnInit()
     // Also we will render as we want to
     g_pApp->GetHumanView()->SetRendering(false);
     g_pApp->GetHumanView()->SetPostponeRenderPresent(true);
+
+    // While closing, the place where he died stays on the screen, without him (he is already back at
+    // the checkpoint): the camera stops following him until the circle opens again
+    m_pCameraTarget = pCamera->GetTarget();
+    pCamera->ClearTarget();
+    SetClawVisible(false);
 
     // Calculate graphics fade speed
     m_FadeInSpeed.x = (windowSize.x / (double)m_FadeInDuration) / 2.0;
@@ -968,7 +979,12 @@ void DeathFadeInOutProcess::VOnUpdate(uint32 msDiff)
                 IEventMgr::Get()->VTriggerEvent(IEventDataPtr(
                     new EventData_Request_Play_Sound(soundInfo)));
 
-                g_pApp->GetHumanView()->SetRendering(true);
+                if (m_pCameraTarget)
+                {
+                    g_pApp->GetHumanView()->GetCamera()->SetTarget(m_pCameraTarget);
+                    m_pCameraTarget.reset();
+                }
+                SetClawVisible(true);
                 m_CurrentTime = 0;
                 m_DeathFadeState = DeathFadeState_FadingOut;
             }
@@ -1009,56 +1025,188 @@ void DeathFadeInOutProcess::VOnUpdate(uint32 msDiff)
     VRender(msDiff);
 }
 
+void HumanView::DrawFrameWithoutPresent(void* pHumanView)
+{
+    HumanView* pThis = static_cast<HumanView*>(pHumanView);
+    const bool postponed = pThis->m_bPostponeRenderPresent;
+    pThis->m_bPostponeRenderPresent = true;
+    pThis->m_LastDraw = 0;
+    pThis->VOnRender(0);
+    pThis->m_bPostponeRenderPresent = postponed;
+}
+
+void HumanView::PlayLevelStartReveal()
+{
+    m_pProcessMgr->AttachProcess(StrongProcessPtr(new LevelRevealProcess(900)));
+}
+
+//=================================================================================================
+//
+// class LevelRevealProcess - the level unrolls out of black from left to right, a still picture,
+// before the game starts (the original game)
+//
+//=================================================================================================
+
+LevelRevealProcess::LevelRevealProcess(int duration)
+    :
+    SpecialEffectProcess(),
+    m_Duration(duration),
+    m_CurrentTime(0)
+{
+}
+
+void LevelRevealProcess::VOnInit()
+{
+    Process::VOnInit();
+    g_pApp->GetGameLogic()->SetRunning(false);
+    g_pApp->GetHumanView()->SetRendering(false);
+    g_pApp->GetHumanView()->SetPostponeRenderPresent(true);
+}
+
+void LevelRevealProcess::VOnUpdate(uint32 msDiff)
+{
+    m_CurrentTime += msDiff;
+    VRender(msDiff);
+    if (m_CurrentTime >= m_Duration)
+    {
+        Succeed();
+    }
+}
+
+void LevelRevealProcess::VRender(uint32 msDiff)
+{
+    SDL_Renderer* pRenderer = g_pApp->GetRenderer();
+    HumanView* pHumanView = g_pApp->GetHumanView();
+    pHumanView->SetRendering(true);
+    pHumanView->VOnRender(msDiff);
+    pHumanView->SetRendering(false);
+
+    const double revealed = m_CurrentTime >= m_Duration ? 1.0 : (double)m_CurrentTime / m_Duration;
+    Point windowSize = g_pApp->GetWindowSize();
+    float scaleX, scaleY;
+    SDL_RenderGetScale(pRenderer, &scaleX, &scaleY);
+    SDL_RenderSetScale(pRenderer, 1.0f, 1.0f);
+    const int edge = (int)(windowSize.x * revealed);
+    SDL_Rect hidden = { edge, 0, (int)windowSize.x - edge, (int)windowSize.y };
+    SDL_SetRenderDrawColor(pRenderer, 0, 0, 0, 255);
+    if (hidden.w > 0)
+    {
+        SDL_RenderFillRect(pRenderer, &hidden);
+    }
+    SDL_RenderSetScale(pRenderer, scaleX, scaleY);
+
+    Util::RenderForcePresent(pRenderer);
+}
+
+void DeathFadeInOutProcess::SetClawVisible(bool visible)
+{
+    if (StrongActorPtr pClaw = g_pApp->GetGameLogic()->GetClawActor())
+    {
+        if (shared_ptr<ActorRenderComponent> pRenderComponent = MakeStrongPtr(pClaw->GetComponent<ActorRenderComponent>()))
+        {
+            pRenderComponent->SetVisible(visible);
+        }
+    }
+}
+
+// Claw on the screen, in the coordinates the effects draw with
+Point DeathFadeInOutProcess::GetClawScreenPosition()
+{
+    Point position = m_Epicenter;
+    StrongActorPtr pClaw = g_pApp->GetGameLogic()->GetClawActor();
+    shared_ptr<CameraNode> pCamera = g_pApp->GetHumanView()->GetCamera();
+    if (pClaw && pCamera)
+    {
+        Point clawPosition = pClaw->GetPositionComponent()->GetPosition();
+        position.Set(clawPosition.x - pCamera->GetPosition().x, clawPosition.y - pCamera->GetPosition().y);
+    }
+    return position;
+}
+
+// Black square with a round transparent hole, stretched over the iris
+static SDL_Texture* GetIrisTexture(SDL_Renderer* pRenderer)
+{
+    static SDL_Texture* s_pIrisTexture = NULL;
+    if (s_pIrisTexture == NULL)
+    {
+        const int size = 256;
+        SDL_Surface* pSurface = Util::CreateRGBSurface(0, size, size, 32);
+        Uint32* pPixels = (Uint32*)pSurface->pixels;
+        const double radius = size / 2.0;
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                const double dx = x + 0.5 - radius, dy = y + 0.5 - radius;
+                const double distance = sqrt(dx * dx + dy * dy);
+                // (a soft pixel at the edge)
+                double alpha = (distance - (radius - 1.5)) / 1.5;
+                alpha = alpha < 0.0 ? 0.0 : (alpha > 1.0 ? 1.0 : alpha);
+                pPixels[y * (pSurface->pitch / 4) + x] = SDL_MapRGBA(pSurface->format, 0, 0, 0, (Uint8)(alpha * 255));
+            }
+        }
+        s_pIrisTexture = SDL_CreateTextureFromSurface(pRenderer, pSurface);
+        SDL_FreeSurface(pSurface);
+    }
+    return s_pIrisTexture;
+}
+
 void DeathFadeInOutProcess::VRender(uint32 msDiff)
 {
     SDL_Renderer* pRenderer = g_pApp->GetRenderer();
-
     Point windowSize = g_pApp->GetWindowSizeScaled();
-    
-    /*g_pApp->GetHumanView()->SetRendering(true);
-    g_pApp->GetHumanView()->VOnRender(msDiff);
-    g_pApp->GetHumanView()->SetRendering(false);*/
 
-    // Render fade in/outs according to current state
-    int referenceTime = 0;
-    Point *fadeSpeed = &m_FadeInSpeed;
+    // The scene as it stands (the game is stopped), with the iris of the original game over it:
+    // a circle closing on where Claw died and opening again where he comes back
+    HumanView* pHumanView = g_pApp->GetHumanView();
+    SetClawVisible(m_DeathFadeState == DeathFadeState_FadingOut || m_DeathFadeState == DeathFadeState_Ended);
+    pHumanView->SetRendering(true);
+    pHumanView->VOnRender(msDiff);
+    pHumanView->SetRendering(false);
+
+    // Opening on Claw where he comes back (the camera has caught up with him once the scene is drawn)
+    if (m_DeathFadeState == DeathFadeState_FadingOut)
+    {
+        m_Epicenter = GetClawScreenPosition();
+    }
+
+    double openRatio = 1.0;
     if (m_DeathFadeState == DeathFadeState_FadingIn)
     {
-        referenceTime = m_CurrentTime;
+        openRatio = 1.0 - (double)m_CurrentTime / m_FadeInDuration;
     }
     else if (m_DeathFadeState == DeathFadeState_FadingOut)
     {
-        referenceTime = m_FadeOutDuration - m_CurrentTime;
-        fadeSpeed = &m_FadeOutSpeed;
+        openRatio = (double)m_CurrentTime / m_FadeOutDuration;
     }
+    openRatio = openRatio < 0.0 ? 0.0 : (openRatio > 1.0 ? 1.0 : openRatio);
 
-    // Left -> right rect
-    int currentWidth = (int)((double)referenceTime * fadeSpeed->x);
-    //LOG("Current width: " + ToStr(currentWidth));
-    SDL_Rect leftRect = { 0, 0, currentWidth, (int)windowSize.y };
-    SDL_Texture* pLeftRectTexture = Util::CreateSDLTextureRect(leftRect.w, leftRect.h, COLOR_BLACK, pRenderer);
-    SDL_RenderCopy(pRenderer, pLeftRectTexture, NULL, &leftRect);
+    // (on the middle of the screen when Claw is off it: he fell)
+    const bool onScreen = m_Epicenter.x >= 0 && m_Epicenter.x <= windowSize.x && m_Epicenter.y >= 0 && m_Epicenter.y <= windowSize.y;
+    const double centerX = onScreen ? m_Epicenter.x : windowSize.x / 2;
+    const double centerY = onScreen ? m_Epicenter.y : windowSize.y / 2;
+    const double farX = (std::max)(centerX, windowSize.x - centerX);
+    const double farY = (std::max)(centerY, windowSize.y - centerY);
+    const int radius = (int)(sqrt(farX * farX + farY * farY) * openRatio);
 
-    // Right -> left rect
-    SDL_Rect rightRect = { (int)windowSize.x - currentWidth , 0, currentWidth, (int)windowSize.y };
-    SDL_Texture* pRightRectTexture = Util::CreateSDLTextureRect(rightRect.w, rightRect.h, COLOR_BLACK, pRenderer);
-    SDL_RenderCopy(pRenderer, pRightRectTexture, NULL, &rightRect);
-
-    int currentHeight = (int)((double)referenceTime * fadeSpeed->y);
-    // Top -> Down
-    SDL_Rect topRect = { 0, 0, (int)windowSize.x, currentHeight };
-    SDL_Texture* pTopTexture = Util::CreateSDLTextureRect(topRect.w, topRect.h, COLOR_BLACK, pRenderer);
-    SDL_RenderCopy(pRenderer, pTopTexture, NULL, &topRect);
-
-    // Down -> Top
-    SDL_Rect bottomRect = { 0, (int)windowSize.y - currentHeight, (int)windowSize.x, currentHeight };
-    SDL_Texture* pBottomTexture = Util::CreateSDLTextureRect(bottomRect.w, bottomRect.h, COLOR_BLACK, pRenderer);
-    SDL_RenderCopy(pRenderer, pBottomTexture, NULL, &bottomRect);
-
-    SDL_DestroyTexture(pLeftRectTexture);
-    SDL_DestroyTexture(pRightRectTexture);
-    SDL_DestroyTexture(pTopTexture);
-    SDL_DestroyTexture(pBottomTexture);
+    SDL_Rect hole = { (int)centerX - radius, (int)centerY - radius, radius * 2, radius * 2 };
+    SDL_SetRenderDrawColor(pRenderer, 0, 0, 0, 255);
+    SDL_Rect above = { 0, 0, (int)windowSize.x, hole.y };
+    SDL_Rect below = { 0, hole.y + hole.h, (int)windowSize.x, (int)windowSize.y - (hole.y + hole.h) };
+    SDL_Rect left = { 0, hole.y, hole.x, hole.h };
+    SDL_Rect right = { hole.x + hole.w, hole.y, (int)windowSize.x - (hole.x + hole.w), hole.h };
+    SDL_Rect* pBlackRects[] = { &above, &below, &left, &right };
+    for (int i = 0; i < 4; i++)
+    {
+        if (pBlackRects[i]->w > 0 && pBlackRects[i]->h > 0)
+        {
+            SDL_RenderFillRect(pRenderer, pBlackRects[i]);
+        }
+    }
+    if (radius > 0)
+    {
+        SDL_RenderCopy(pRenderer, GetIrisTexture(pRenderer), NULL, &hole);
+    }
 
     Util::RenderForcePresent(pRenderer);
 }
@@ -1162,8 +1310,9 @@ void FadingLine::Render(SDL_Renderer* pRenderer, SDL_Texture* pFragmentTexture, 
     assert(pFragmentTexture != NULL);
 
     int fragIdx = 0;
-    for (bool shouldRender : m_FadedFragments)
+    for (size_t i = 0; i < m_FadedFragments.size(); i++)
     {
+        bool shouldRender = m_FadedFragments[i];
         if (!shouldRender)
         {
             fragIdx++;

@@ -59,7 +59,7 @@ bool Scene::AddChild(uint32 actorId, shared_ptr<ISceneNode> kid)
 {
     if (actorId != INVALID_ACTOR_ID)
     {
-        auto result = m_ActorMap.insert(std::make_pair(actorId, kid));
+        std::pair<SceneActorMap::iterator, bool> result = m_ActorMap.insert(std::make_pair(actorId, kid));
         if (!result.second)
         {
             LOG_WARNING("Overwriting existing actor in scene. ActorId: " + ToStr(actorId));

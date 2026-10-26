@@ -55,7 +55,7 @@ bool MemoryPool::Init(unsigned int chunkSize, unsigned int numChunks)
 void MemoryPool::Destroy(void)
 {
     // dump the state of the memory pool
-#ifdef _DEBUG
+#if defined(_DEBUG) && defined(_WIN32)
     std::string str;
     if (m_numAllocs != 0)
         str = "***(" + ToStr(m_numAllocs) + ") ";

@@ -2,6 +2,23 @@
 
 #include "../SharedDefines.h"
 
+#ifdef OPENCLAW_FRAME_PROFILE
+// Calls a listener and logs it when it takes long (which event, which of its listeners)
+static void CallListener(const EventListenerDelegate& listener, const IEventDataPtr& pEvent, int listenerIdx)
+{
+    const Uint64 start = SDL_GetPerformanceCounter();
+    listener(pEvent);
+    const Uint64 us = (SDL_GetPerformanceCounter() - start) * 1000000 / SDL_GetPerformanceFrequency();
+    if (us > 20000)
+    {
+        LOG("[event] " + std::string(pEvent->GetName()) + " listener " + ToStr(listenerIdx) + ": " + ToStr((int)(us / 1000)) + " ms");
+    }
+}
+#define CALL_LISTENER(listener, pEvent, idx) CallListener(listener, pEvent, idx)
+#else
+#define CALL_LISTENER(listener, pEvent, idx) listener(pEvent)
+#endif
+
 
 //---------------------------------------------------------------------------------------------------------------------
 // EventMgr::EventMgr
@@ -28,7 +45,7 @@ bool EventMgr::VAddListener(const EventListenerDelegate& eventDelegate, const Ev
     //LOG_TAG("Events", "Attempting to add delegate function for event type: " + ToStr(type, 16));
 
     EventListenerList& eventListenerList = m_EventListeners[type];  // this will find or create the entry
-    for (auto it = eventListenerList.begin(); it != eventListenerList.end(); ++it)
+    for (EventListenerList::iterator it = eventListenerList.begin(); it != eventListenerList.end(); ++it)
     {
         if (eventDelegate == (*it))
         {
@@ -51,11 +68,11 @@ bool EventMgr::VRemoveListener(const EventListenerDelegate& eventDelegate, const
     //LOG_TAG("Events", "Attempting to remove delegate function from event type: " + ToStr(type, 16));
     bool success = false;
 
-    auto findIt = m_EventListeners.find(type);
+    EventListenerMap::iterator findIt = m_EventListeners.find(type);
     if (findIt != m_EventListeners.end())
     {
         EventListenerList& listeners = findIt->second;
-        for (auto it = listeners.begin(); it != listeners.end(); ++it)
+        for (EventListenerList::iterator it = listeners.begin(); it != listeners.end(); ++it)
         {
             if (eventDelegate == (*it))
             {
@@ -79,15 +96,16 @@ bool EventMgr::VTriggerEvent(const IEventDataPtr& pEvent) const
     //LOG_TAG("Events", "Attempting to trigger event " + std::string(pEvent->GetName()));
     bool processed = false;
 
-    auto findIt = m_EventListeners.find(pEvent->VGetEventType());
+    EventListenerMap::const_iterator findIt = m_EventListeners.find(pEvent->VGetEventType());
     if (findIt != m_EventListeners.end())
     {
         const EventListenerList& eventListenerList = findIt->second;
+        int listenerIdx = 0;
         for (EventListenerList::const_iterator it = eventListenerList.begin(); it != eventListenerList.end(); ++it)
         {
             EventListenerDelegate listener = (*it);
             //LOG_TAG("Events", "Sending Event " + std::string(pEvent->GetName()) + " to delegate.");
-            listener(pEvent);  // call the delegate
+            CALL_LISTENER(listener, pEvent, listenerIdx++);  // call the delegate
             processed = true;
         }
     }
@@ -113,7 +131,7 @@ bool EventMgr::VQueueEvent(const IEventDataPtr& pEvent)
 
     //LOG_TAG("Events", "Attempting to queue event: " + std::string(pEvent->GetName()));
 
-    auto findIt = m_EventListeners.find(pEvent->VGetEventType());
+    EventListenerMap::iterator findIt = m_EventListeners.find(pEvent->VGetEventType());
     if (findIt != m_EventListeners.end())
     {
         m_Queues[m_ActiveQueue].push_back(pEvent);
@@ -152,12 +170,12 @@ bool EventMgr::VAbortEvent(const EventType& inType, bool allOfType)
     if (findIt != m_EventListeners.end())
     {
         EventQueue& eventQueue = m_Queues[m_ActiveQueue];
-        auto it = eventQueue.begin();
+        EventQueue::iterator it = eventQueue.begin();
         while (it != eventQueue.end())
         {
             // Removing an item from the queue will invalidate the iterator, so have it point to the next member.  All
             // work inside this loop will be done using thisIt.
-            auto thisIt = it;
+            EventQueue::iterator thisIt = it;
             ++it;
 
             if ((*thisIt)->VGetEventType() == inType)
@@ -181,9 +199,9 @@ void EventMgr::VAbortAllEvents()
     assert(m_ActiveQueue >= 0);
     assert(m_ActiveQueue < EVENTMANAGER_NUM_QUEUES);
 
-    for (EventQueue& queue : m_Queues)
+    for (int queueIdx = 0; queueIdx < EVENTMANAGER_NUM_QUEUES; queueIdx++)
     {
-        queue.clear();
+        m_Queues[queueIdx].clear();
     }
 }
 
@@ -232,18 +250,19 @@ bool EventMgr::VUpdate(unsigned long maxMillis)
         const EventType& eventType = pEvent->VGetEventType();
 
         // find all the delegate functions registered for this event
-        auto findIt = m_EventListeners.find(eventType);
+        EventListenerMap::iterator findIt = m_EventListeners.find(eventType);
         if (findIt != m_EventListeners.end())
         {
             const EventListenerList& eventListeners = findIt->second;
             //LOG_TAG("EventLoop", "\t\tFound " + ToStr((unsigned long)eventListeners.size()) + " delegates");
 
             // call each listener
-            for (auto it = eventListeners.begin(); it != eventListeners.end(); ++it)
+            int listenerIdx = 0;
+            for (EventListenerList::const_iterator it = eventListeners.begin(); it != eventListeners.end(); ++it)
             {
                 EventListenerDelegate listener = (*it);
                 //LOG_TAG("EventLoop", "\t\tSending event " + std::string(pEvent->GetName()) + " to delegate");
-                listener(pEvent);
+                CALL_LISTENER(listener, pEvent, listenerIdx++);
             }
         }
 

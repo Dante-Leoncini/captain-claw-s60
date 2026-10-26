@@ -239,7 +239,7 @@ struct midi_token_t
     uint8_t    iData;
 };
 
-static bool operator < (const midi_token_t& oLeft, const midi_token_t& oRight)
+static bool MidiTokenLess(const midi_token_t& oLeft, const midi_token_t& oRight)
 {
     return oLeft.iTime < oRight.iTime;
 }
@@ -364,7 +364,7 @@ MidiFile* WAP_XmiToMidiFromData(char* xmiData, size_t xmiLength)
     if (!bufOutput.write("MTrk\xBA\xAD\xF0\x0D", 8))
         return NULL;
 
-    std::sort(lstTokens.begin(), lstTokens.end());
+    std::sort(lstTokens.begin(), lstTokens.end(), MidiTokenLess);
 
     iTokenTime = 0;
     iTokenType = 0;
@@ -440,7 +440,7 @@ MidiFile* WAP_XmiToMidiFromFile(const char* xmiFilePath)
         return NULL;
     }
 
-    return WAP_XmiToMidiFromData(xmiFileContents.data(), xmiFileContents.size());
+    return WAP_XmiToMidiFromData((xmiFileContents.empty() ? NULL : &xmiFileContents[0]), xmiFileContents.size());
 }
 
 MidiFile* WAP_XmiToMidiFromRezFile(RezFile* rezFile)

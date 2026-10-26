@@ -45,8 +45,9 @@ void UpdateScoreImageNumbers(int newNumber, ActorList& imageNumberActorList)
     dividerStr[0] = '1';
     int divider = std::stoi(dividerStr);
 
-    for (Actor* pScoreNumber : imageNumberActorList)
+    for (size_t pScoreNumberIdx = 0; pScoreNumberIdx < imageNumberActorList.size(); pScoreNumberIdx++)
     {
+        Actor* pScoreNumber = imageNumberActorList[pScoreNumberIdx];
         int num = (newNumber / divider) % 10;
         // All score images are automatically converted to frame00X format where frame001 is 0, frame002 is 1 etc.
         std::string imageNumStr = "frame" + Util::ConvertToThreeDigitsString(num + 1);
@@ -72,8 +73,9 @@ void AddNumberImageActorsToList(int numberToDisplay, int futureMaximumNumber, Po
     }
 
     toList.reserve(toList.size() + numberStr.length());
-    for (char charDigit : numberStr)
+    for (size_t charDigitIdx = 0; charDigitIdx < numberStr.size(); charDigitIdx++)
     {
+        char charDigit = numberStr[charDigitIdx];
         int digit = DigitCharToInt(charDigit);
         std::string numberImagePath;
 

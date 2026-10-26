@@ -4,25 +4,25 @@
 #include "../../../Util/Point.h"
 
 Touch_Event PressRecognizer::VGetEvent(SDL_FingerID finger) {
-    auto it = m_Events.find(finger);
+    std::map<SDL_FingerID, std::pair<Touch_PressEvent, EventState::Type> >::iterator it = m_Events.find(finger);
     assert (it != m_Events.end());
-    auto state = it->second.second;
+    EventState::Type state = it->second.second;
     assert (state == EventState::DOWN_READY || state == EventState::UP_READY);
     if (state == EventState::DOWN_READY) {
         it->second.second = EventState::DOWN;
-        return Touch_Event{GetId(), PRESS_START, it->second.first};
+        return Touch_Event(GetId(), PRESS_START, it->second.first);
     } else /*if (state == EventState::UP_READY)*/ {
         it->second.second = EventState::UP;
-        return Touch_Event{GetId(), PRESS_END, it->second.first};
+        return Touch_Event(GetId(), PRESS_END, it->second.first);
     }
 }
 
-RecognizerState PressRecognizer::VGetState(SDL_FingerID finger) {
+RecognizerState::Type PressRecognizer::VGetState(SDL_FingerID finger) {
     if (m_Candidates.find(finger) != m_Candidates.end()) {
         return RecognizerState::Recognizing;
     }
 
-    auto it = m_Events.find(finger);
+    std::map<SDL_FingerID, std::pair<Touch_PressEvent, EventState::Type> >::iterator it = m_Events.find(finger);
     if (it != m_Events.end()) {
         return RecognizerStateByEventState(it->second.second);
     }
@@ -34,9 +34,9 @@ void PressRecognizer::VFingerDetached(SDL_FingerID finger) {
     m_Events.erase(finger);
 }
 
-RecognizerState PressRecognizer::VOnFingerDown(const SDL_TouchFingerEvent &evt) {
+RecognizerState::Type PressRecognizer::VOnFingerDown(const SDL_TouchFingerEvent &evt) {
     if (m_ThresholdTime == 0) {
-        m_Events[evt.fingerId] = std::make_pair(Touch_PressEvent{evt}, EventState::DOWN_READY);
+        m_Events[evt.fingerId] = std::make_pair(Touch_PressEvent(evt), EventState::DOWN_READY);
         return RecognizerStateByEventState(EventState::DOWN_READY);
     } else {
         m_Candidates[evt.fingerId] = evt;
@@ -44,13 +44,13 @@ RecognizerState PressRecognizer::VOnFingerDown(const SDL_TouchFingerEvent &evt) 
     }
 }
 
-RecognizerState PressRecognizer::VOnFingerMotion(const SDL_TouchFingerEvent &evt) {
+RecognizerState::Type PressRecognizer::VOnFingerMotion(const SDL_TouchFingerEvent &evt) {
     {
-        auto it = m_Candidates.find(evt.fingerId);
+        std::map<SDL_FingerID, SDL_TouchFingerEvent>::iterator it = m_Candidates.find(evt.fingerId);
         if (it != m_Candidates.end()) {
-            const auto &firstEvent = it->second;
+            const SDL_TouchFingerEvent &firstEvent = it->second;
 
-            Point vector{evt.x - firstEvent.x, evt.y - firstEvent.y};
+            Point vector(evt.x - firstEvent.x, evt.y - firstEvent.y);
             if (vector.Length() >= m_ThresholdDistance) {
                 m_Candidates.erase(it);
                 return RecognizerState::Failed;
@@ -58,7 +58,7 @@ RecognizerState PressRecognizer::VOnFingerMotion(const SDL_TouchFingerEvent &evt
 
             if (evt.timestamp - firstEvent.timestamp >= m_ThresholdTime) {
                 // time is out
-                m_Events[evt.fingerId] = std::make_pair(Touch_PressEvent{firstEvent}, EventState::DOWN_READY);
+                m_Events[evt.fingerId] = std::make_pair(Touch_PressEvent(firstEvent), EventState::DOWN_READY);
                 m_Candidates.erase(it);
                 return RecognizerStateByEventState(EventState::DOWN_READY);
             }
@@ -66,7 +66,7 @@ RecognizerState PressRecognizer::VOnFingerMotion(const SDL_TouchFingerEvent &evt
         }
     }
     {
-        auto it = m_Events.find(evt.fingerId);
+        std::map<SDL_FingerID, std::pair<Touch_PressEvent, EventState::Type> >::iterator it = m_Events.find(evt.fingerId);
         if (it != m_Events.end()) {
             return RecognizerStateByEventState(it->second.second);
         }
@@ -74,8 +74,8 @@ RecognizerState PressRecognizer::VOnFingerMotion(const SDL_TouchFingerEvent &evt
     return RecognizerState::Failed;
 }
 
-RecognizerState PressRecognizer::VOnFingerUp(const SDL_TouchFingerEvent &evt) {
-    auto it = m_Events.find(evt.fingerId);
+RecognizerState::Type PressRecognizer::VOnFingerUp(const SDL_TouchFingerEvent &evt) {
+    std::map<SDL_FingerID, std::pair<Touch_PressEvent, EventState::Type> >::iterator it = m_Events.find(evt.fingerId);
     if (it != m_Events.end()) {
         it->second.second = EventState::UP_READY;
         return RecognizerStateByEventState(EventState::UP_READY);
@@ -83,7 +83,7 @@ RecognizerState PressRecognizer::VOnFingerUp(const SDL_TouchFingerEvent &evt) {
     return RecognizerState::Failed;
 }
 
-RecognizerState PressRecognizer::RecognizerStateByEventState(PressRecognizer::EventState eventState) {
+RecognizerState::Type PressRecognizer::RecognizerStateByEventState(PressRecognizer::EventState::Type eventState) {
     switch (eventState) {
         case EventState::DOWN_READY:
         case EventState::UP_READY:
@@ -102,13 +102,13 @@ void PressRecognizer::VOnUpdate() {
     if (m_Candidates.empty()) {
         return;
     }
-    for (auto it = m_Candidates.begin(); it != m_Candidates.end();) {
-        const auto &fingerId = it->first;
-        const auto &firstEvent = it->second;
+    for (std::map<SDL_FingerID, SDL_TouchFingerEvent>::iterator it = m_Candidates.begin(); it != m_Candidates.end();) {
+        const SDL_FingerID &fingerId = it->first;
+        const SDL_TouchFingerEvent &firstEvent = it->second;
         if (SDL_GetTicks() - firstEvent.timestamp > m_ThresholdTime) {
             // time is out
-            m_Events[fingerId] = std::make_pair(Touch_PressEvent{firstEvent}, EventState::DOWN_READY);
-            it = m_Candidates.erase(it);
+            m_Events[fingerId] = std::make_pair(Touch_PressEvent(firstEvent), EventState::DOWN_READY);
+            m_Candidates.erase(it++);
         } else {
             ++it;
         }

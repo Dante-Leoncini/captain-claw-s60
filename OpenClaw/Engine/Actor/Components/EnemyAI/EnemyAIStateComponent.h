@@ -366,7 +366,7 @@ private:
 // BaseAttackAIStateComponent
 //=====================================================================================================================
 
-typedef std::vector<std::shared_ptr<EnemyAttackAction>> AttackActionList;
+typedef std::vector<std::shared_ptr<EnemyAttackAction> > AttackActionList;
 class BaseAttackAIStateComponent : public BaseEnemyAIStateComponent, public AnimationObserver
 {
 public:

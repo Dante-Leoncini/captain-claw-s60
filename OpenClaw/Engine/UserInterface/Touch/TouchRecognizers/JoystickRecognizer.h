@@ -12,37 +12,37 @@ public:
                                                                      m_ThresholdTime(thresholdTime) {};
 
     Touch_Event VGetEvent(SDL_FingerID finger) override;
-    RecognizerState VGetState(SDL_FingerID finger) override;
+    RecognizerState::Type VGetState(SDL_FingerID finger) override;
     void VFingerDetached(SDL_FingerID finger) override;
 
     void VOnUpdate() override;
 
 protected:
-    RecognizerState VOnFingerDown(const SDL_TouchFingerEvent &evt) override;
-    RecognizerState VOnFingerMotion(const SDL_TouchFingerEvent &evt) override;
-    RecognizerState VOnFingerUp(const SDL_TouchFingerEvent &evt) override;
+    RecognizerState::Type VOnFingerDown(const SDL_TouchFingerEvent &evt) override;
+    RecognizerState::Type VOnFingerMotion(const SDL_TouchFingerEvent &evt) override;
+    RecognizerState::Type VOnFingerUp(const SDL_TouchFingerEvent &evt) override;
 
 private:
-    enum class EventState {
+    struct EventState { enum Type {
         MOVE_READY,
         MOVED,
         RESET_READY,
         RESETED
-    };
+    }; };
 
-    RecognizerState RecognizerStateByEventState(EventState eventState);
+    RecognizerState::Type RecognizerStateByEventState(EventState::Type eventState);
 
     struct EventData {
         SDL_TouchFingerEvent firstEvent;
         SDL_TouchFingerEvent lastEvent;
 
-        EventData() = default;
+        EventData() {}
         EventData(const SDL_TouchFingerEvent &firstEvent,
                   const SDL_TouchFingerEvent &lastEvent) : firstEvent(firstEvent),
                                                            lastEvent(lastEvent) {}
     };
 
-    std::map<SDL_FingerID, std::pair<EventData, EventState>> m_Events;
+    std::map<SDL_FingerID, std::pair<EventData, EventState::Type> > m_Events;
 
     // Collect new fingers and wait thresholdDistance during thresholdMs
     std::map<SDL_FingerID, SDL_TouchFingerEvent> m_Candidates;

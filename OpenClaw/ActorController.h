@@ -22,7 +22,7 @@ public:
     bool VOnPointerButtonDown(SDL_MouseButtonEvent& mouseEvent);
     bool VOnPointerButtonUp(SDL_MouseButtonEvent& mouseEvent);
 
-    std::vector<std::shared_ptr<AbstractRecognizer>> VRegisterRecognizers() override;
+    std::vector<std::shared_ptr<AbstractRecognizer> > VRegisterRecognizers() override;
     bool VOnTouch(const Touch_Event &evt) override;
 
 private:

@@ -292,7 +292,8 @@ static SDL_Rect GetScreenRect()
     int targetWidth = (int)(windowSize.x / scale.x);
     int targetHeight = (int)(windowSize.y / scale.y);
 
-    return{ 0, 0, targetWidth, targetHeight };
+    SDL_Rect screenRect = { 0, 0, targetWidth, targetHeight };
+    return screenRect;
 }
 
 //=================================================================================================
@@ -414,7 +415,7 @@ void ScreenElementScoreScreen::ForceNextState()
     else if (m_State == ScoreScreenState_SpawningScoreRows)
     {
         // Force all rows to spawn process
-        for (auto iter = m_ScoreRowList.begin(); iter != m_ScoreRowList.end();)
+        for (std::vector<ScoreRowDef>::iterator iter = m_ScoreRowList.begin(); iter != m_ScoreRowList.end();)
         {
             StrongProcessPtr pRowProcess(new SpawnScoreRowProcess((*iter)));
             m_pProcessMgr->AttachProcess(pRowProcess);
@@ -425,8 +426,9 @@ void ScreenElementScoreScreen::ForceNextState()
         }
 
         // And force them to finish immediately
-        for (StrongProcessPtr pProc : m_SpawnRowProcessList)
+        for (size_t i = 0; i < m_SpawnRowProcessList.size(); i++)
         {
+            StrongProcessPtr pProc = m_SpawnRowProcessList[i];
             if (SpawnScoreRowProcess* pSpawnRowProc = dynamic_cast<SpawnScoreRowProcess*>(pProc.get()))
             {
                 pSpawnRowProc->ForceSpawnImmediately();
@@ -442,8 +444,9 @@ void ScreenElementScoreScreen::ForceNextState()
     else if (m_State == ScoreScreenState_Finished)
     {
         // Dissolve rows
-        for (StrongProcessPtr pProc : m_SpawnRowProcessList)
+        for (size_t i = 0; i < m_SpawnRowProcessList.size(); i++)
         {
+            StrongProcessPtr pProc = m_SpawnRowProcessList[i];
             if (SpawnScoreRowProcess* pSpawnRowProc = dynamic_cast<SpawnScoreRowProcess*>(pProc.get()))
             {
                 // Dissolve row
@@ -470,6 +473,23 @@ void ScreenElementScoreScreen::ForceNextState()
     }
 }
 
+// Story movie of CLAW.FEC shown after finishing a level (-1: none)
+static int MovieAfterLevel(int levelNumber)
+{
+    switch (levelNumber)
+    {
+        case 2: return 2;
+        case 4: return 3;
+        case 6: return 4;
+        case 8: return 5;
+        case 10: return 6;
+        case 12: return 7;
+        case 13: return 8;
+        case 14: return 9;
+        default: return -1;
+    }
+}
+
 void ScreenElementScoreScreen::LoadNextLevel()
 {
     if (m_State == ScoreScreenState_Exiting)
@@ -483,6 +503,12 @@ void ScreenElementScoreScreen::LoadNextLevel()
     m_pProcessMgr->AbortAllProcesses(true);
     SAFE_DELETE(m_pProcessMgr);
     IEventMgr::Get()->VAbortAllEvents();
+
+    int movieIndex = MovieAfterLevel(nextLevelNum - 1);
+    if (movieIndex >= 0)
+    {
+        g_pApp->PlayMovies(std::vector<int>(1, movieIndex));
+    }
 
     IEventDataPtr pEvent(new EventData_Menu_LoadGame(nextLevelNum, false, 0));
     IEventMgr::Get()->VQueueEvent(pEvent);
@@ -530,9 +556,9 @@ void ScreenElementScoreScreen::ScoreScreenFinishedIntroDelegate(IEventDataPtr pE
     m_pBackground = m_pScoreBackgroundImage;
 
     // Destroy any spawned actors
-    for (const auto &actorIter : m_ActorMap)
+    for (SceneActorMap::iterator actorIter = m_ActorMap.begin(); actorIter != m_ActorMap.end(); ++actorIter)
     {
-        IEventMgr::Get()->VQueueEvent(IEventDataPtr(new EventData_Destroy_Actor(actorIter.first)));
+        IEventMgr::Get()->VQueueEvent(IEventDataPtr(new EventData_Destroy_Actor(actorIter->first)));
     }
 
     // Create score numbers of how many score points we gained in game and in level

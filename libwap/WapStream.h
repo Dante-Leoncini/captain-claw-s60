@@ -1,9 +1,8 @@
-#ifndef io_h
-#define io_h
+#ifndef WAPSTREAM_H_
+#define WAPSTREAM_H_
 
 #include <algorithm>
 #include <fstream>
-#include <type_traits>
 #include <vector>
 #include <stdexcept>
 #include <cstring>
@@ -32,19 +31,36 @@ struct BasicStreamHelper<true>
 };
 
 template <bool Output>
+struct BasicStreamBuffer
+{
+    typedef const char *type;
+};
+
+template <>
+struct BasicStreamBuffer<true>
+{
+    typedef char *type;
+};
+
+template <bool Output>
 class BasicStream
 {
-    typedef typename std::conditional<Output, char *, const char *>::type buffer_ptr_t;
+    typedef typename BasicStreamBuffer<Output>::type buffer_ptr_t;
 
 protected:
     inline BasicStream(buffer_ptr_t buffer, size_t buffer_size, unsigned offset = 0)
         : m_buffer(buffer), m_buffer_size(buffer_size), m_offset(offset) {}
 
-    template <typename T, typename... Tail>
-    void read_write(T &&val, Tail &&... tail)
+    template <typename T>
+    void read_write(T &val)
     {
-        read_write_impl(std::forward<T>(val));
-        read_write(std::forward<Tail>(tail)...);
+        read_write_impl(val);
+    }
+
+    template <typename T>
+    void read_write(const T &val)
+    {
+        read_write_impl(val);
     }
 
     template <typename T>
@@ -59,8 +75,6 @@ public:
     inline unsigned tell() { return m_offset; }
 
 private:
-    inline void read_write() {}
-
     template <typename T>
     void read_write_impl(const T &val)
     {
@@ -93,19 +107,25 @@ private:
 
     buffer_ptr_t m_buffer;
     size_t m_buffer_size;
-    unsigned m_offset = 0;
+    unsigned m_offset;
 };
 
 class InputStream : public BasicStream<false>
 {
 public:
     inline InputStream(const char *buffer, size_t buffer_size,
-        unsigned offset = 0) : BasicStream(buffer, buffer_size, offset) {}
+        unsigned offset = 0) : BasicStream<false>(buffer, buffer_size, offset) {}
 
-    template <typename... Args>
-    void read(Args &&... args)
+    template <typename T>
+    void read(T &val)
     {
-        read_write(std::forward<Args>(args)...);
+        this->read_write(val);
+    }
+
+    template <typename T>
+    void read(const T &val)
+    {
+        this->read_write(val);
     }
 
     template <typename T>
@@ -119,12 +139,12 @@ class OutputStream : public BasicStream<true>
 {
 public:
     inline OutputStream(char *buffer, size_t buffer_size, unsigned offset = 0)
-        : BasicStream(buffer, buffer_size, offset) {}
+        : BasicStream<true>(buffer, buffer_size, offset) {}
 
-    template <typename... Args>
-    void write(Args &&... args)
+    template <typename T>
+    void write(T &val)
     {
-        read_write(std::forward<Args>(args)...);
+        this->read_write(val);
     }
 
     template <typename T>

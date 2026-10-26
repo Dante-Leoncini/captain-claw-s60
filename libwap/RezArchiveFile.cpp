@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <string.h>
 #include <stdint.h>
+#ifndef SDL2LITE
 #include <mutex>
+#endif
 #include <map>
 #include <string>
 #include <string.h>
@@ -22,7 +24,9 @@ struct RezArchiveFileEntry
 {
     RezArchive* rezArchive;
     std::ifstream* fileStream;
+#ifndef SDL2LITE
     std::mutex mutex;
+#endif
 };
 
 /*************************************************************************/
@@ -43,6 +47,65 @@ uint8_t directorySeparator = '/';
 
 template<typename T>
 static void FileRead(T* dest, std::ifstream* file, int32_t offset)
+{
+    file->seekg(offset, std::ios::beg);
+    file->read((char*)dest, sizeof(*dest));
+}
+
+// Reads the directory tables through a block cache: walking them with seekg/get on the
+// stream costs a file system call per byte on some platforms (Symbian).
+class RezDirectoryReader
+{
+public:
+    RezDirectoryReader(std::ifstream* file) : m_File(file), m_Start(0), m_Pos(0) {}
+
+    void seekg(uint32_t offset, std::ios::seekdir)
+    {
+        m_Pos = offset;
+    }
+
+    void read(char* dest, uint32_t size)
+    {
+        for (uint32_t i = 0; i < size; i++)
+        {
+            dest[i] = get();
+        }
+    }
+
+    char get()
+    {
+        if (m_Pos < m_Start || m_Pos >= m_Start + m_Buffer.size())
+        {
+            Fill(m_Pos);
+            if (m_Buffer.empty())
+            {
+                m_Pos++;
+                return 0;
+            }
+        }
+        return m_Buffer[m_Pos++ - m_Start];
+    }
+
+private:
+    void Fill(uint32_t offset)
+    {
+        const uint32_t blockSize = 16 * 1024;
+        m_Buffer.resize(blockSize);
+        m_File->clear();
+        m_File->seekg(offset, std::ios::beg);
+        m_File->read(&m_Buffer[0], blockSize);
+        m_Buffer.resize((size_t)m_File->gcount());
+        m_Start = offset;
+    }
+
+    std::ifstream* m_File;
+    std::vector<char> m_Buffer;
+    uint32_t m_Start;
+    uint32_t m_Pos;
+};
+
+template<typename T>
+static void FileRead(T* dest, RezDirectoryReader* file, int32_t offset)
 {
     file->seekg(offset, std::ios::beg);
     file->read((char*)dest, sizeof(*dest));
@@ -137,7 +200,9 @@ char* WAP_GetRezFileData(RezFile* rezFile)
 
         RezArchiveFileEntry* rezArchiveFileEntry = g_rezArchiveFileEntryMap[rezFile->owner];
 
+#ifndef SDL2LITE
         std::lock_guard<std::mutex> lock(rezArchiveFileEntry->mutex);
+#endif
 
         // Seek to file's offset within REZ file and load it
         rezArchiveFileEntry->fileStream->seekg(rezFile->offset, std::ios::beg);
@@ -253,8 +318,9 @@ RezDirectory* WAP_GetRezDirectoryFromRezDirectory(RezDirectory* rezDirectory, co
     }
 
     RezDirectory* currentDirectory = rezDirectory;
-    for (auto rezDirectoryName : directoriesTokens)
+    for (size_t rezDirectoryNameIdx = 0; rezDirectoryNameIdx < directoriesTokens.size(); rezDirectoryNameIdx++)
     {
+        std::string rezDirectoryName = directoriesTokens[rezDirectoryNameIdx];
         if (currentDirectory == NULL)
         {
             return NULL;
@@ -268,8 +334,6 @@ RezDirectory* WAP_GetRezDirectoryFromRezDirectory(RezDirectory* rezDirectory, co
 
 RezFile* WAP_GetRezFileFromRezArchive(RezArchive* rezArchive, const char* rezFilePath)
 {
-    static std::mutex mutex;
-
     // Check if we got valid input
     if ((rezArchive == NULL) || (rezArchive->rootDirectory == NULL) ||
         (rezFilePath == NULL) || (strlen(rezFilePath) == 0))
@@ -450,7 +514,7 @@ uint32_t WAP_GetRezFilesCount(RezArchive* rezArchive)
     return g_rezArchiveFilesMap[rezArchive]->size();
 }
 
-static void ReadRezDirectory(RezArchive*& rezArchive, RezDirectory* rezDirectory, std::ifstream* fileStream)
+static void ReadRezDirectory(RezArchive*& rezArchive, RezDirectory* rezDirectory, RezDirectoryReader* fileStream)
 {
     uint32_t i;
     uint32_t currentOffset = rezDirectory->offset;
@@ -471,7 +535,7 @@ static void ReadRezDirectory(RezArchive*& rezArchive, RezDirectory* rezDirectory
         {
             rezDirectory->directoryContents = new RezDirectoryContents;
             // Initialize to default values
-            (*rezDirectory->directoryContents) = { 0 };
+            (*rezDirectory->directoryContents) = RezDirectoryContents();
         }
         // Determine whether next element is file or another directory
         FileRead(&isDirectoryFlag, fileStream, currentOffset);
@@ -479,10 +543,10 @@ static void ReadRezDirectory(RezArchive*& rezArchive, RezDirectory* rezDirectory
         {
             // Create new rez directory
             RezDirectory* newRezDirectory = new RezDirectory;
-            (*newRezDirectory) = { 0 };
+            (*newRezDirectory) = RezDirectory();
             newRezDirectory->parent = rezDirectory;
 
-            loadedRezDirectories.emplace_back(newRezDirectory);
+            loadedRezDirectories.push_back(newRezDirectory);
 
             FileRead(&(newRezDirectory->offset),      fileStream, currentOffset + 4);
             FileRead(&(newRezDirectory->size),        fileStream, currentOffset + 8);
@@ -519,11 +583,11 @@ static void ReadRezDirectory(RezArchive*& rezArchive, RezDirectory* rezDirectory
 
             // Create new rez file
             RezFile* newRezFile = new RezFile;
-            (*newRezFile) = { 0 };
+            (*newRezFile) = RezFile();
             newRezFile->parent = rezDirectory;
             newRezFile->owner = rezArchive;
 
-            loadedRezFiles.emplace_back(newRezFile);
+            loadedRezFiles.push_back(newRezFile);
 
             FileRead(&(newRezFile->offset), fileStream, currentOffset + 4);
             FileRead(&(newRezFile->size), fileStream, currentOffset + 8);
@@ -580,8 +644,9 @@ static void ReadRezDirectory(RezArchive*& rezArchive, RezDirectory* rezDirectory
 
     // Store loaded rez directories
     i = 0;
-    for (auto rezDirectoryIter : loadedRezDirectories)
+    for (size_t rezDirectoryIterIdx = 0; rezDirectoryIterIdx < loadedRezDirectories.size(); rezDirectoryIterIdx++)
     {
+        RezDirectory* rezDirectoryIter = loadedRezDirectories[rezDirectoryIterIdx];
         rezDirectory->directoryContents->rezDirectories[i] = rezDirectoryIter;
         i++;
     }
@@ -592,8 +657,9 @@ static void ReadRezDirectory(RezArchive*& rezArchive, RezDirectory* rezDirectory
 
     // Store loaded rez files
     i = 0;
-    for (auto rezFileIter : loadedRezFiles)
+    for (size_t rezFileIterIdx = 0; rezFileIterIdx < loadedRezFiles.size(); rezFileIterIdx++)
     {
+        RezFile* rezFileIter = loadedRezFiles[rezFileIterIdx];
         rezDirectory->directoryContents->rezFiles[i] = rezFileIter;
         i++;
     }
@@ -610,7 +676,7 @@ RezArchive* WAP_LoadRezArchive(const char* rezFilePath)
     RezArchive* rezArchive = new RezArchive;
     rezArchive->rootDirectory = new RezDirectory;
     // Initialize to default values
-    (*rezArchive->rootDirectory) = { 0 };
+    (*rezArchive->rootDirectory) = RezDirectory();
     rezArchive->rootDirectory->name = StdStringToCharArray(std::string(""));
 
     // Read rez file header which is 127 bytes long
@@ -635,7 +701,8 @@ RezArchive* WAP_LoadRezArchive(const char* rezFilePath)
     }
 
     // Recursively read all directories
-    ReadRezDirectory(rezArchive, rezArchive->rootDirectory, fileStream);
+    RezDirectoryReader directoryReader(fileStream);
+    ReadRezDirectory(rezArchive, rezArchive->rootDirectory, &directoryReader);
 
     // Register loaded REZ archive file
     RegisterRezArchiveFile(rezArchive, fileStream);

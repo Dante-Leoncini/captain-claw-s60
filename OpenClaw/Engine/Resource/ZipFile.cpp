@@ -38,10 +38,17 @@
 // --------------------------------------------------------------------------
 
 #pragma pack(1)
+
+// RVCT only allows unaligned member access on __packed types
+#ifdef __ARMCC__
+#define ZIP_PACKED __packed
+#else
+#define ZIP_PACKED
+#endif
 // --------------------------------------------------------------------------
 // struct ZipFile::TZipLocalHeader                    - Chapter 8, page 215
 // --------------------------------------------------------------------------
-struct ZipFile::TZipLocalHeader
+ZIP_PACKED struct ZipFile::TZipLocalHeader
 {
     enum
     {
@@ -63,7 +70,7 @@ struct ZipFile::TZipLocalHeader
 // --------------------------------------------------------------------------
 // struct ZipFile::TZipDirHeader                    - Chapter 8, page 215
 // --------------------------------------------------------------------------
-struct ZipFile::TZipDirHeader
+ZIP_PACKED struct ZipFile::TZipDirHeader
 {
     enum
     {
@@ -82,7 +89,7 @@ struct ZipFile::TZipDirHeader
 // --------------------------------------------------------------------------
 // struct ZipFile::TZipDirFileHeader                    - Chapter 8, page 215
 // --------------------------------------------------------------------------
-struct ZipFile::TZipDirFileHeader
+ZIP_PACKED struct ZipFile::TZipDirFileHeader
 {
     enum
     {
@@ -115,7 +122,7 @@ struct ZipFile::TZipDirFileHeader
 
 static bool IsZipDir(const std::string& node)
 {
-    return node.back() == '/';
+    return node[node.size() - 1] == '/';
 }
 
 static char* string_to_lowercase(char* s)
@@ -204,7 +211,7 @@ bool ZipFile::Init(const std::string &resFileName)
             pfh += fh.fnameLen + fh.xtraLen + fh.cmntLen;
 
             std::string dirName = spath;
-            auto pos = dirName.rfind("/");
+            std::string::size_type pos = dirName.rfind("/");
             if (pos != std::string::npos)
             {
                 if (pos == 0) {
@@ -213,7 +220,7 @@ bool ZipFile::Init(const std::string &resFileName)
                     dirName.erase(pos);
                 }
             }
-            if (dirName.back() != '/')
+            if (dirName[dirName.size() - 1] != '/')
             {
                 dirName += '/';
             }
@@ -267,7 +274,7 @@ int ZipFile::Find(const std::string &path) const
 
 std::vector<std::string>  ZipFile::GetAllFilesInDirectory(const std::string& dirPath)
 {
-    return {};
+    return std::vector<std::string>();
 }
 
 // --------------------------------------------------------------------------
@@ -356,7 +363,7 @@ bool ZipFile::ReadFile(int i, void *pBuf)
         return false;
 
     // Alloc compressed data buffer and read the whole stream
-    std::unique_ptr<char[]> pcData = std::unique_ptr<char[]>{ new /*(std::nothrow)*/ char[h.cSize] };
+    std::unique_ptr<char[]> pcData = std::unique_ptr<char[]>(new /*(std::nothrow)*/ char[h.cSize]);
     if (!pcData)
         return false;
 
@@ -432,7 +439,7 @@ bool ZipFile::ReadLargeFile(int i, void *pBuf, void(*progressCallback)(int, bool
         return false;
 
     // Alloc compressed data buffer and read the whole stream
-    std::unique_ptr<char[]> pcData = std::unique_ptr<char[]>{ new /*(std::nothrow)*/ char[h.cSize] };
+    std::unique_ptr<char[]> pcData = std::unique_ptr<char[]>(new /*(std::nothrow)*/ char[h.cSize]);
     if (!pcData)
         return false;
 

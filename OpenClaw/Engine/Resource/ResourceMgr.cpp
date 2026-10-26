@@ -15,8 +15,9 @@ std::shared_ptr<ResourceCache> ResourceMgrImpl::VGetResourceCacheFromName(const 
 {
     assert(m_ResourceCacheList.size() > 0);
 
-    for (auto &pResCache : m_ResourceCacheList)
+    for (size_t pResCacheIdx = 0; pResCacheIdx < m_ResourceCacheList.size(); pResCacheIdx++)
     {
+        std::shared_ptr<ResourceCache>& pResCache = m_ResourceCacheList[pResCacheIdx];
         if (pResCache->GetName() == resCacheName)
         {
             return pResCache;
@@ -42,8 +43,9 @@ std::shared_ptr<ResourceHandle> ResourceMgrImpl::VGetHandle(Resource* r, const s
     }
     else // Find in all available res caches
     {
-        for (auto &pResCache : m_ResourceCacheList)
+        for (size_t pResCacheIdx = 0; pResCacheIdx < m_ResourceCacheList.size(); pResCacheIdx++)
         {
+            std::shared_ptr<ResourceCache>& pResCache = m_ResourceCacheList[pResCacheIdx];
             if (std::shared_ptr<ResourceHandle> pHandle = pResCache->GetHandle(r))
             {
                 return pHandle;
@@ -70,8 +72,9 @@ int32 ResourceMgrImpl::VPreload(const std::string pattern, void(*progressCallbac
     }
     else // Preload all available res caches
     {
-        for (auto &pResCache : m_ResourceCacheList)
+        for (size_t pResCacheIdx = 0; pResCacheIdx < m_ResourceCacheList.size(); pResCacheIdx++)
         {
+            std::shared_ptr<ResourceCache>& pResCache = m_ResourceCacheList[pResCacheIdx];
             totalLoaded += pResCache->Preload(pattern, progressCallback);
         }
     }
@@ -94,8 +97,9 @@ std::vector<std::string> ResourceMgrImpl::VMatch(const std::string pattern, cons
     }
     else
     {
-        for (auto &pResCache : m_ResourceCacheList)
+        for (size_t pResCacheIdx = 0; pResCacheIdx < m_ResourceCacheList.size(); pResCacheIdx++)
         {
+            std::shared_ptr<ResourceCache>& pResCache = m_ResourceCacheList[pResCacheIdx];
             std::vector<std::string> matched = pResCache->Match(pattern);
             matchedStrings.insert(matchedStrings.end(), matched.begin(), matched.end());
         }
@@ -119,8 +123,9 @@ std::vector<std::string> ResourceMgrImpl::VGetAllFilesInDirectory(const char* di
     }
     else
     {
-        for (auto &pResCache : m_ResourceCacheList)
+        for (size_t pResCacheIdx = 0; pResCacheIdx < m_ResourceCacheList.size(); pResCacheIdx++)
         {
+            std::shared_ptr<ResourceCache>& pResCache = m_ResourceCacheList[pResCacheIdx];
             std::vector<std::string> files = pResCache->GetAllFilesInDirectory(directoryPath);
             allFiles.insert(allFiles.end(), files.begin(), files.end());
         }
@@ -144,8 +149,9 @@ void ResourceMgrImpl::VFlush(const std::string& resCacheName)
     }
     else
     {
-        for (auto &pResCache : m_ResourceCacheList)
+        for (size_t pResCacheIdx = 0; pResCacheIdx < m_ResourceCacheList.size(); pResCacheIdx++)
         {
+            std::shared_ptr<ResourceCache>& pResCache = m_ResourceCacheList[pResCacheIdx];
             pResCache->Flush();
         }
     }
@@ -154,8 +160,9 @@ void ResourceMgrImpl::VFlush(const std::string& resCacheName)
 bool ResourceMgrImpl::VHasResourceCache(const std::string& resCacheName)
 {
     bool bHasResCache = false;
-    for (auto &pResCache : m_ResourceCacheList)
+    for (size_t pResCacheIdx = 0; pResCacheIdx < m_ResourceCacheList.size(); pResCacheIdx++)
     {
+        std::shared_ptr<ResourceCache>& pResCache = m_ResourceCacheList[pResCacheIdx];
         if (pResCache->GetName() == resCacheName)
         {
             return true;

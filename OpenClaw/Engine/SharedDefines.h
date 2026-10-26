@@ -119,7 +119,7 @@ template
 <typename KeyType, typename ValueType>
 ValueType GetValueFromMap(KeyType _key, const std::map<KeyType, ValueType>& _map)
 {
-    auto findIt = _map.find(_key);
+    typename std::map<KeyType, ValueType>::const_iterator findIt = _map.find(_key);
     assert(findIt != _map.end() && "Failed to locate value from map");
 
     return findIt->second;

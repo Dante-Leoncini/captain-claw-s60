@@ -69,7 +69,7 @@ protected:
     int32           m_ZCoord;
 };
 
-typedef std::vector <shared_ptr<ISceneNode>> SceneNodeList;
+typedef std::vector <shared_ptr<ISceneNode> > SceneNodeList;
 
 class SceneNode : public ISceneNode
 {
@@ -119,7 +119,7 @@ protected:
     BaseRenderComponent*    m_pRenderComponent;
 };
 
-typedef std::map<uint32, shared_ptr<ISceneNode>> SceneActorMap;
+typedef std::map<uint32, shared_ptr<ISceneNode> > SceneActorMap;
 
 class RootNode : public SceneNode
 {
@@ -151,7 +151,7 @@ protected:
     void AddToGrid(int x, int y, shared_ptr<ISceneNode> &kid);
     shared_ptr<ISceneNode> RemoveFromGrid(int x, int y, uint32 actorId);
 
-    std::vector<std::vector<SceneNodeList>> m_Grid; // m_Grid[x][y]
+    std::vector<std::vector<SceneNodeList> > m_Grid; // m_Grid[x][y]
     const int m_CellWidth, m_CellHeight;
     const int m_MaxRowCount, m_MaxColumnCount;
 };
@@ -211,10 +211,10 @@ public:
 
 protected:
     void CalcCameraRect() {
-        m_CachedCameraRect = {(int) (m_Properties.GetPosition().x + m_CameraOffset.x),
-                              (int) (m_Properties.GetPosition().y + m_CameraOffset.y),
-                              (int) (m_Width / m_ScaleX),
-                              (int) (m_Height / m_ScaleY)};
+        m_CachedCameraRect.x = (int) (m_Properties.GetPosition().x + m_CameraOffset.x);
+        m_CachedCameraRect.y = (int) (m_Properties.GetPosition().y + m_CameraOffset.y);
+        m_CachedCameraRect.w = (int) (m_Width / m_ScaleX);
+        m_CachedCameraRect.h = (int) (m_Height / m_ScaleY);
     }
 
     uint32      m_Width;

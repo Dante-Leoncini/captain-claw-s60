@@ -46,7 +46,7 @@ void SpringBoardComponent::VPostInit()
     m_pAnimationComponent->AddObserver(this);
     m_pAnimationComponent->SetAnimation(m_Properties.idleAnimName);
 
-    if (auto pTriggerComp = MakeStrongPtr(m_pOwner->GetComponent<TriggerComponent>()))
+    if (shared_ptr<TriggerComponent> pTriggerComp = MakeStrongPtr(m_pOwner->GetComponent<TriggerComponent>()))
     {
         pTriggerComp->AddObserver(this);
     }
@@ -60,9 +60,10 @@ void SpringBoardComponent::VOnAnimationFrameChanged(Animation* pAnimation, Anima
             (pNewFrame->idx == m_Properties.springFrameIdx))
         {
             // Only does anything for Claw I assume
-            for (Actor* pStandingActor : m_StandingActorsList)
+            for (size_t i = 0; i < m_StandingActorsList.size(); i++)
             {
-                auto pPC = pStandingActor->GetPhysicsComponent();
+                Actor* pStandingActor = m_StandingActorsList[i];
+                shared_ptr<PhysicsComponent> pPC = pStandingActor->GetPhysicsComponent();
                 if (pPC)
                 {
                     pPC->SetIsForcedUp(true, (int)m_Properties.springHeight);
@@ -112,7 +113,7 @@ void SpringBoardComponent::OnActorBeginContact(Actor* pActor)
 
 void SpringBoardComponent::OnActorEndContact(Actor* pActor)
 {
-    for (auto actorIter = m_StandingActorsList.begin(); actorIter != m_StandingActorsList.end(); ++actorIter)
+    for (ActorList::iterator actorIter = m_StandingActorsList.begin(); actorIter != m_StandingActorsList.end(); ++actorIter)
     {
         if (pActor == (*actorIter))
         {

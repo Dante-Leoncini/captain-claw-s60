@@ -42,17 +42,17 @@ void Actor::PostInit()
     m_pPositionComponent = MakeStrongPtr(GetComponent<PositionComponent>(PositionComponent::g_Name));
     m_pPhysicsComponent = MakeStrongPtr(GetComponent<PhysicsComponent>());
 
-    for (auto &component : _components)
+    for (ActorComponentsMap::iterator it = _components.begin(); it != _components.end(); ++it)
     {
-        component.second->VPostInit();
+        it->second->VPostInit();
     }
 }
 
 void Actor::PostPostInit()
 {
-    for (auto &component : _components)
+    for (ActorComponentsMap::iterator it = _components.begin(); it != _components.end(); ++it)
     {
-        component.second->VPostPostInit();
+        it->second->VPostPostInit();
     }
 }
 
@@ -68,9 +68,9 @@ void Actor::Destroy()
 
 void Actor::Update(uint32 msDiff)
 {
-    for (auto &component : _components)
+    for (ActorComponentsMap::iterator it = _components.begin(); it != _components.end(); ++it)
     {
-        component.second->VUpdate(msDiff);
+        it->second->VUpdate(msDiff);
     }
 }
 
@@ -91,8 +91,8 @@ void Actor::AddComponent(StrongActorComponentPtr component)
 
 void Actor::OnWorldFinishedLoading()
 {
-    for (const auto& componentPair : _components)
+    for (ActorComponentsMap::iterator it = _components.begin(); it != _components.end(); ++it)
     {
-        componentPair.second->VOnWorldFinishedLoading();
+        it->second->VOnWorldFinishedLoading();
     }
 }

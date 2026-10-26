@@ -86,6 +86,9 @@ ClawControllableComponent::ClawControllableComponent()
     m_TakeDamageTimeLeftMs = 0;
     m_bIsInBossFight = false;
     m_ThrowingTime = 0;
+    m_bIsFallingOffScreen = false;
+    m_FallOffScreenSpeed = 0.0;
+    m_FallOffScreenTimeMs = 0;
 
     IEventMgr::Get()->VAddListener(MakeDelegate(this, &ClawControllableComponent::BossFightStartedDelegate), EventData_Boss_Fight_Started::sk_EventType);
     IEventMgr::Get()->VAddListener(MakeDelegate(this, &ClawControllableComponent::BossFightEndedDelegate), EventData_Boss_Fight_Ended::sk_EventType);
@@ -122,7 +125,7 @@ void ClawControllableComponent::VPostInit()
     assert(m_pExclamationMark);
     m_pClawAnimationComponent->AddObserver(this);
 
-    auto pHealthComponent = MakeStrongPtr(m_pOwner->GetComponent<HealthComponent>(HealthComponent::g_Name));
+    shared_ptr<HealthComponent> pHealthComponent = MakeStrongPtr(m_pOwner->GetComponent<HealthComponent>(HealthComponent::g_Name));
     pHealthComponent->AddObserver(this);
 
     m_pPhysicsComponent = m_pOwner->GetPhysicsComponent().get();
@@ -190,7 +193,7 @@ void ClawControllableComponent::VPostInit()
         frame.imageId = 100;
         frame.imageName = "frame100";
         frame.duration = 500;
-        std::vector<AnimationFrame> freezeAnimFrames = {frame};
+        std::vector<AnimationFrame> freezeAnimFrames(1, frame);
 
         std::shared_ptr<Animation> pFreezeAnim = Animation::CreateAnimation(freezeAnimFrames, "freeze", m_pClawAnimationComponent);
         assert(pFreezeAnim);
@@ -203,7 +206,7 @@ void ClawControllableComponent::VPostInit()
         frame.imageId = 401;
         frame.imageName = "frame401";
         frame.duration = 2000;
-        std::vector<AnimationFrame> highFallAnimFrames = {frame};
+        std::vector<AnimationFrame> highFallAnimFrames(1, frame);
 
         std::shared_ptr<Animation> pHighFallAnim = Animation::CreateAnimation(highFallAnimFrames, "highfall", m_pClawAnimationComponent);
         assert(pHighFallAnim);
@@ -227,6 +230,12 @@ void ClawControllableComponent::VPostPostInit()
 
 void ClawControllableComponent::VUpdate(uint32 msDiff)
 {
+    if (m_bIsFallingOffScreen)
+    {
+        UpdateFallingOffScreen(msDiff);
+        return;
+    }
+
     if (m_State == ClawState_Standing ||
         m_State == ClawState_Idle)
     {
@@ -972,18 +981,11 @@ void ClawControllableComponent::VOnAnimationLooped(Animation* pAnimation)
     std::string animName = pAnimation->GetName();
     if (pAnimation->GetName().find("death") != std::string::npos)
     {
-        shared_ptr<LifeComponent> pClawLifeComponent = MakeStrongPtr(m_pOwner->GetComponent<LifeComponent>());
-        assert(pClawLifeComponent != nullptr);
-
-        shared_ptr<EventData_Claw_Died> pEvent(new EventData_Claw_Died(
-            m_pOwner->GetGUID(), 
-            m_pPositionComponent->GetPosition(), 
-            pClawLifeComponent->GetLives() - 1));
-        IEventMgr::Get()->VTriggerEvent(pEvent);
-
-        SetCurrentPhysicsState();
-        m_pPhysicsComponent->RestoreGravityScale();
-        m_pRenderComponent->SetVisible(true);
+        // (the fall off the screen ends when Claw is out of sight)
+        if (!m_bIsFallingOffScreen)
+        {
+            FinishDying();
+        }
     }
     else if (animName == "damage1" ||
              animName == "damage2")
@@ -1011,6 +1013,67 @@ bool ClawControllableComponent::IsAttackingOrShooting()
     return false;
 }
 
+void ClawControllableComponent::FinishDying()
+{
+    shared_ptr<LifeComponent> pClawLifeComponent = MakeStrongPtr(m_pOwner->GetComponent<LifeComponent>());
+    assert(pClawLifeComponent != nullptr);
+
+    shared_ptr<EventData_Claw_Died> pEvent(new EventData_Claw_Died(
+        m_pOwner->GetGUID(), 
+        m_pPositionComponent->GetPosition(), 
+        pClawLifeComponent->GetLives() - 1));
+    IEventMgr::Get()->VTriggerEvent(pEvent);
+
+    // He comes back standing on the floor of the checkpoint
+    m_pClawAnimationComponent->SetAnimation("stand");
+    m_State = ClawState_Standing;
+    m_pPhysicsComponent->RestoreGravityScale();
+    m_pRenderComponent->SetVisible(true);
+}
+
+void ClawControllableComponent::StartFallingOffScreen()
+{
+    m_bIsFallingOffScreen = true;
+    m_FallOffScreenSpeed = -0.6; // pixels per ms, upwards
+    m_FallOffScreenTimeMs = 0;
+
+    // Out of the physics world, so the floor doesn't stop him, and the camera stops following him
+    g_pApp->GetGameLogic()->VGetGamePhysics()->VDeactivate(m_pOwner->GetGUID());
+    if (shared_ptr<CameraNode> pCamera = g_pApp->GetHumanView()->GetCamera())
+    {
+        m_pCameraTargetBeforeDeath = pCamera->GetTarget();
+        pCamera->ClearTarget();
+    }
+}
+
+void ClawControllableComponent::UpdateFallingOffScreen(uint32 msDiff)
+{
+    const double gravity = 0.0018; // pixels per ms^2
+    m_FallOffScreenTimeMs += msDiff;
+    m_FallOffScreenSpeed += gravity * msDiff;
+    Point position = m_pPositionComponent->GetPosition();
+    position.y += m_FallOffScreenSpeed * msDiff;
+    m_pPositionComponent->SetPosition(position);
+    IEventMgr::Get()->VTriggerEvent(IEventDataPtr(new EventData_Move_Actor(m_pOwner->GetGUID(), position)));
+
+    shared_ptr<CameraNode> pCamera = g_pApp->GetHumanView()->GetCamera();
+    const SDL_Rect cameraRect = pCamera->GetCameraRect();
+    const bool outOfSight = position.y - 100 > cameraRect.y + cameraRect.h;
+    if (!outOfSight && m_FallOffScreenTimeMs < 4000)
+    {
+        return;
+    }
+
+    m_bIsFallingOffScreen = false;
+    if (m_pCameraTargetBeforeDeath)
+    {
+        pCamera->SetTarget(m_pCameraTargetBeforeDeath);
+        m_pCameraTargetBeforeDeath.reset();
+    }
+    g_pApp->GetGameLogic()->VGetGamePhysics()->VActivate(m_pOwner->GetGUID());
+    FinishDying();
+}
+
 void ClawControllableComponent::VOnHealthBelowZero(DamageType damageType, int sourceActorId)
 {
     if (m_State == ClawState_Dying)
@@ -1020,16 +1083,21 @@ void ClawControllableComponent::VOnHealthBelowZero(DamageType damageType, int so
 
     IEventMgr::Get()->VQueueEvent(IEventDataPtr(new EventData_Claw_Health_Below_Zero(m_pOwner->GetGUID())));
 
-    // TODO: Track how exactly claw died
-    if (m_pClawAnimationComponent->GetCurrentAnimationName() != "spikedeath")
+    if (m_State != ClawState_Dying)
     {
-        m_pClawAnimationComponent->SetAnimation("spikedeath");
+        // Traps (spikes, damage auras) and death tiles: he dies where he is. Anything else (enemies,
+        // projectiles, explosions): he falls off the screen, like in the original game
+        const bool diesInPlace = damageType == DamageType_None || damageType == DamageType_DeathTile;
+        m_pClawAnimationComponent->SetAnimation(diesInPlace ? "spikedeath" : "falldeath");
         m_pPhysicsComponent->SetGravityScale(0.0f);
         m_State = ClawState_Dying;
 
-        std::string deathSound = SOUND_CLAW_DEATH_SPIKES;
+        std::string deathSound = diesInPlace ? SOUND_CLAW_DEATH_SPIKES : "/CLAW/SOUNDS/FALLDEATH.WAV";
+        if (!diesInPlace)
+        {
+            StartFallingOffScreen();
+        }
 
-        // TODO: When claw dies, in the original game he falls off the screen and respawns
         if (damageType == DamageType_DeathTile)
         {
             int currentLevel = g_pApp->GetGameLogic()->GetCurrentLevelData()->GetLevelNumber();
@@ -1193,7 +1261,7 @@ void ClawControllableComponent::OnClawKilledEnemy(DamageType killDamageType, Act
 {
     assert(pKilledEnemyActor != NULL);
 
-    static std::vector<std::string> s_OnEnemyKillSoundList =
+    static const char* s_OnEnemyKillSounds[] =
     {
         SOUND_CLAW_KILL_MELEE1,
         SOUND_CLAW_KILL_MELEE2,
@@ -1204,6 +1272,8 @@ void ClawControllableComponent::OnClawKilledEnemy(DamageType killDamageType, Act
         SOUND_CLAW_LAND_LOVER1_SHORT,
         SOUND_CLAW_LAND_LOVER2_LONG
     };
+    static std::vector<std::string> s_OnEnemyKillSoundList(s_OnEnemyKillSounds,
+        s_OnEnemyKillSounds + sizeof(s_OnEnemyKillSounds) / sizeof(s_OnEnemyKillSounds[0]));
 
     int soundPlayChance = 36;
     if ((killDamageType == DamageType_MeleeAttack) && 

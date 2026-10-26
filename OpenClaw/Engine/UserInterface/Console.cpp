@@ -28,7 +28,8 @@ SDL_Rect GetRenderRectFromTexture(SDL_Texture* texture, int16_t x, int16_t y)
     int w, h;
     SDL_QueryTexture(texture, NULL, NULL, &w, &h);
 
-    return{ x, y, w, h };
+    SDL_Rect rect = { x, y, w, h };
+    return rect;
 }
 
 void RenderText(SDL_Renderer* renderer, std::string text, TTF_Font* font, SDL_Color color, int16_t x, int16_t y)
@@ -81,7 +82,7 @@ void SplitStringIntoVector(std::string str, std::vector<std::string>& vec)
         vec.push_back(str);
     }
 
-    if (str.back() == ' ')
+    if (str[str.size() - 1] == ' ')
     {
         vec.push_back(std::string(""));
     }
@@ -197,7 +198,8 @@ ConsoleLine::ConsoleLine(TTF_Font* font, uint16_t lineNumber, int16_t leftOffset
     int lineHeight = TTF_FontHeight(_font);
     int totalWidth = 0;
 
-    _renderRect = { 0, _lineNumber * lineHeight, totalWidth, lineHeight };
+    SDL_Rect renderRect = { 0, _lineNumber * lineHeight, totalWidth, lineHeight };
+    _renderRect = renderRect;
 
     _committed = false;
 }
@@ -235,8 +237,9 @@ void ConsoleLine::AddText(std::string text, SDL_Color color)
 std::string ConsoleLine::GetLineText()
 {
     std::string lineText;
-    for (auto linePart : _texts)
+    for (size_t i = 0; i < _texts.size(); i++)
     {
+        ConsoleText linePart = _texts[i];
         lineText += linePart.GetText();
     }
 
@@ -251,8 +254,9 @@ void ConsoleLine::Render(SDL_Renderer* renderer, uint16_t startX, uint16_t start
         return;
     }
 
-    for (ConsoleText text : _texts)
+    for (size_t i = 0; i < _texts.size(); i++)
     {
+        ConsoleText text = _texts[i];
         //cout << "for (ConsoleText text : _texts)" << endl;
         text.Render(renderer, startX, startY);
     }
@@ -606,8 +610,9 @@ void Console::RenderCommandHistory(SDL_Renderer* renderer)
 {
     SDL_Rect consoleRect = GetRenderRect();
     // Render all visible console lines
-    for (auto consoleLine : _consoleTextLines)
+    for (size_t i = 0; i < _consoleTextLines.size(); i++)
     {
+        ConsoleLine consoleLine = _consoleTextLines[i];
 
         SDL_Rect lineRect = consoleLine.GetRenderRect();
         //PrintRect(consoleRect, "ConsoleRect");
@@ -634,7 +639,8 @@ void Console::RenderCurrentCommand(SDL_Renderer* renderer)
 
 SDL_Rect Console::GetRenderRect()
 {
-    return{ _x, _y, _width, _height - _lineHeight - m_LineSeparatorHeight };
+    SDL_Rect rect = { _x, _y, _width, _height - _lineHeight - m_LineSeparatorHeight };
+    return rect;
 }
 
 void Console::CommitCurrentCommand()
@@ -712,8 +718,9 @@ void Console::AddAutocompleteCommand(const char* command)
 
 void Console::InvalidateSameCommands(std::string subCommand, int16_t subCommandPos)
 {
-    for (auto autocompleteCommand : _autocompleteCommands)
+    for (size_t i = 0; i < _autocompleteCommands.size(); i++)
     {
+        std::string autocompleteCommand = _autocompleteCommands[i];
         int pos = std::find(_autocompleteCommands.begin(), _autocompleteCommands.end(), autocompleteCommand) - _autocompleteCommands.begin();
 
         std::vector <std::string> autocompleteCommandVector;
@@ -746,8 +753,9 @@ void Console::AutocompleteCommand()
     SplitStringIntoVector(_currentCommandText, currentStringsVector);
 
     // Iterate over all saved autocomplete commands
-    for (auto autocompleteCommand : _autocompleteCommands)
+    for (size_t cmdIdx = 0; cmdIdx < _autocompleteCommands.size(); cmdIdx++)
     {
+        std::string autocompleteCommand = _autocompleteCommands[cmdIdx];
         // Check if we already checked tried this command in previous "TAB" click, if we did, skip it
         int pos = std::find(_autocompleteCommands.begin(), _autocompleteCommands.end(), autocompleteCommand) - _autocompleteCommands.begin();
 

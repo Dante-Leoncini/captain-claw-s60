@@ -15,7 +15,7 @@ namespace ClawLevelUtil
         const shared_ptr<LevelMetadata> pLevelMetadata = g_pApp->GetLevelMetadata(levelNumber);
         assert(pLevelMetadata != nullptr);
 
-        auto findIt = pLevelMetadata->logicToActorPrototypeMap.find(logic);
+        std::map<std::string, ActorPrototype>::iterator findIt = pLevelMetadata->logicToActorPrototypeMap.find(logic);
         if (findIt == pLevelMetadata->logicToActorPrototypeMap.end())
         {
             return ActorPrototype_None;
@@ -90,7 +90,7 @@ namespace ClawLevelUtil
         const shared_ptr<LevelMetadata> pLevelMetadata = g_pApp->GetLevelMetadata(levelNumber);
         assert(pLevelMetadata != nullptr);
 
-        auto findIt = pLevelMetadata->tileIdToTopLadderEndMap.find(tileId);
+        std::map<int, Point>::iterator findIt = pLevelMetadata->tileIdToTopLadderEndMap.find(tileId);
         if (findIt != pLevelMetadata->tileIdToTopLadderEndMap.end())
         {
             fixtureOffset = findIt->second;

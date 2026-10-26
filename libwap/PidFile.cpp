@@ -3,10 +3,21 @@
 #include <stdint.h>
 
 #include "libwap.h"
-#include "IO.h"
+#include "WapStream.h"
 
 #include <iostream>
 using namespace std;
+
+static WAP_ColorRGBA MakeColorRGBA(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+{
+    WAP_ColorRGBA color;
+    color.r = r;
+    color.g = g;
+    color.b = b;
+    color.a = a;
+    return color;
+}
+
 WapPid* WAP_PidLoadFromData(char* data, size_t size, WapPal* palette)
 {
     uint32_t x, y;
@@ -23,18 +34,18 @@ WapPid* WAP_PidLoadFromData(char* data, size_t size, WapPal* palette)
     wapPid = new WapPid;
 
     // Set default values;
-    (*wapPid) = { 0 };
+    (*wapPid) = WapPid();
 
     InputStream pidFileStream(data, size);
 
-    pidFileStream.read(wapPid->fileDesc,
-        wapPid->flags,
-        wapPid->width,
-        wapPid->height,
-        wapPid->offsetX,
-        wapPid->offsetY,
-        wapPid->unk0,
-        wapPid->unk1);
+    pidFileStream.read(wapPid->fileDesc);
+    pidFileStream.read(wapPid->flags);
+    pidFileStream.read(wapPid->width);
+    pidFileStream.read(wapPid->height);
+    pidFileStream.read(wapPid->offsetX);
+    pidFileStream.read(wapPid->offsetY);
+    pidFileStream.read(wapPid->unk0);
+    pidFileStream.read(wapPid->unk1);
 
     /********************** PID PALETTE **********************/
 
@@ -84,7 +95,7 @@ WapPid* WAP_PidLoadFromData(char* data, size_t size, WapPal* palette)
                     int32_t i = byte - 128;
                     while ((i > 0) && (y < wapPid->height))
                     {
-                        wapPid->colors[y * wapPid->width + x] = WAP_ColorRGBA{ 0, 0, 0, 1 };
+                        wapPid->colors[y * wapPid->width + x] = MakeColorRGBA(0, 0, 0, 1);
                         x++;
                         if (x == wapPid->width)
                         {
@@ -101,10 +112,10 @@ WapPid* WAP_PidLoadFromData(char* data, size_t size, WapPal* palette)
                     {
                         pidFileStream.read(byte);
 
-                        wapPid->colors[y * wapPid->width + x] = WAP_ColorRGBA{ imagePalette->colors[byte].r,
+                        wapPid->colors[y * wapPid->width + x] = MakeColorRGBA(imagePalette->colors[byte].r,
                             imagePalette->colors[byte].g,
                             imagePalette->colors[byte].b,
-                            imagePalette->colors[byte].a };
+                            imagePalette->colors[byte].a);
 
                         x++;
                         if (x == wapPid->width)
@@ -134,10 +145,10 @@ WapPid* WAP_PidLoadFromData(char* data, size_t size, WapPal* palette)
 
                 while ((i > 0) && (y < wapPid->height))
                 {
-                    wapPid->colors[y * wapPid->width + x] = WAP_ColorRGBA{ imagePalette->colors[byte].r,
+                    wapPid->colors[y * wapPid->width + x] = MakeColorRGBA(imagePalette->colors[byte].r,
                         imagePalette->colors[byte].g,
                         imagePalette->colors[byte].b,
-                        imagePalette->colors[byte].a };
+                        imagePalette->colors[byte].a);
 
                     x++;
                     if (x == wapPid->width)
@@ -187,7 +198,7 @@ WapPid* WAP_PidLoadFromFile(const char* pidFilePath, WapPal* palette)
         return NULL;
     }
 
-    return WAP_PidLoadFromData(pidFileContents.data(), pidFileContents.size(), palette);
+    return WAP_PidLoadFromData((pidFileContents.empty() ? NULL : &pidFileContents[0]), pidFileContents.size(), palette);
 }
 
 WapPid* WAP_PidLoadFromRezFile(RezFile* rezFile, WapPal* palette)

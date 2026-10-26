@@ -84,7 +84,7 @@ shared_ptr<TriggerComponent> GetTriggerComponentFromB2Body(const b2Body* pBody)
         return nullptr;
     }
 
-    auto pWeakTrigComp = pActor->GetComponent<TriggerComponent>(TriggerComponent::g_Name);
+    weak_ptr<TriggerComponent> pWeakTrigComp = pActor->GetComponent<TriggerComponent>(TriggerComponent::g_Name);
     if (!pWeakTrigComp.expired())
     {
         shared_ptr<TriggerComponent> pTriggerComponent = MakeStrongPtr(pWeakTrigComp);
@@ -169,6 +169,8 @@ b2Fixture* GetLowermostFixture(b2Body* pBody, bool discardSensors)
 //    Constructor. This only sets default values.
 //
 ClawPhysics::ClawPhysics()
+    :
+    m_UpdateCount(0)
 {
 
 }
@@ -212,6 +214,30 @@ bool ClawPhysics::VInitialize()
 //
 //    Keeps graphics and physics in sync
 //
+void ClawPhysics::ParkBodiesOutsideActiveArea()
+{
+    BaseGameLogic* pGameLogic = g_pApp->GetGameLogic();
+    for (ActorIdAndBodyList::const_iterator listIt = m_ActorIdAndBodyList.begin(); listIt != m_ActorIdAndBodyList.end(); ++listIt)
+    {
+        b2Body* pBody = listIt->second;
+        if (pBody->GetType() == b2_staticBody)
+        {
+            continue;
+        }
+
+        bool isInArea = pGameLogic->IsInActiveArea(b2Vec2ToPoint(MetersToPixels(pBody->GetPosition())));
+        if (!isInArea && pBody->IsActive())
+        {
+            pBody->SetActive(false);
+            m_ParkedBodies.insert(pBody);
+        }
+        else if (isInArea && m_ParkedBodies.erase(pBody) > 0)
+        {
+            pBody->SetActive(true);
+        }
+    }
+}
+
 void ClawPhysics::VSyncVisibleScene()
 {
     // check all the existing actor's bodies for changes. 
@@ -221,12 +247,14 @@ void ClawPhysics::VSyncVisibleScene()
     /*for (ActorIDToBox2DBodyMap::const_iterator it = m_ActorToBodyMap.begin();
         it != m_ActorToBodyMap.end();
         ++it)*/
-    for (const std::pair<uint32, b2Body*>& it : m_ActorIdAndBodyList)
+    for (ActorIdAndBodyList::const_iterator listIt = m_ActorIdAndBodyList.begin(); listIt != m_ActorIdAndBodyList.end(); ++listIt)
     {
+        const std::pair<uint32, b2Body*>& it = *listIt;
         b2Body* pActorBody = it.second;
         assert(pActorBody);
 
-        if (pActorBody->GetType() == b2_staticBody)
+        // (asleep or parked: nothing moved)
+        if (pActorBody->GetType() == b2_staticBody || !pActorBody->IsAwake() || !pActorBody->IsActive())
         {
             continue;
         }
@@ -235,7 +263,7 @@ void ClawPhysics::VSyncVisibleScene()
 
         //StrongActorPtr pGameActor = MakeStrongPtr(g_pApp->GetGameLogic()->VGetActor(actorId));
         //assert(pGameActor);
-        auto pGameActor = static_cast<Actor*>(pActorBody->GetUserData());
+        Actor* pGameActor = static_cast<Actor*>(pActorBody->GetUserData());
         assert(pGameActor && pGameActor->GetGUID() == actorId);
 
         if (pGameActor && pActorBody)
@@ -395,21 +423,28 @@ void ClawPhysics::VOnUpdate(const uint32 msDiff)
 {
     //PROFILE_CPU("ClawPhysics::VOnUpdate");
 
+    if (g_pApp->GetGlobalOptions()->activeAreaMargin > 0 && (m_UpdateCount++ % 8) == 0)
+    {
+        ParkBodiesOutsideActiveArea();
+    }
+
     m_pWorld->Step(msDiff / 1000.0f, 10, 8);
 
     // Remove actors form physics simulation which are scheduled to be destroyed
-    for (uint32 actorId : m_ActorsToBeDestroyed)
+    for (size_t i = 0; i < m_ActorsToBeDestroyed.size(); i++)
     {
+        uint32 actorId = m_ActorsToBeDestroyed[i];
         if (b2Body* pBody = FindBox2DBody(actorId))
         {
             assert(m_pWorld->IsLocked() == false);
 
             pBody->SetActive(false);
             pBody->SetUserData(NULL);
+            m_ParkedBodies.erase(pBody);
             m_pWorld->DestroyBody(pBody);
             m_ActorToBodyMap.erase(actorId);
             m_BodyToActorMap.erase(pBody);
-            for (auto iter = m_ActorIdAndBodyList.begin(); iter != m_ActorIdAndBodyList.end(); iter++)
+            for (ActorIdAndBodyList::iterator iter = m_ActorIdAndBodyList.begin(); iter != m_ActorIdAndBodyList.end(); iter++)
             {
                 if (iter->first == actorId)
                 {
@@ -422,23 +457,23 @@ void ClawPhysics::VOnUpdate(const uint32 msDiff)
     m_ActorsToBeDestroyed.clear();
 
     // Create any pending actors
-    for (const ActorBodyDef* pActorBodyDef : m_ActorBodiesToBeCreated)
+    for (size_t i = 0; i < m_ActorBodiesToBeCreated.size(); i++)
     {
-        VAddActorBody(pActorBodyDef);
+        VAddActorBody(m_ActorBodiesToBeCreated[i]);
     }
     m_ActorBodiesToBeCreated.clear();
 
     // Create any pending fixtures
-    for (const auto& fixturePair : m_FixturesToBeCreated)
+    for (size_t i = 0; i < m_FixturesToBeCreated.size(); i++)
     {
-        VAddActorFixtureToBody(fixturePair.first, fixturePair.second);
+        VAddActorFixtureToBody(m_FixturesToBeCreated[i].first, m_FixturesToBeCreated[i].second);
     }
     m_FixturesToBeCreated.clear();
 
     // Create any pending fixtures
-    for (const auto& forcePair : m_DeferredAppliedForce)
+    for (size_t i = 0; i < m_DeferredAppliedForce.size(); i++)
     {
-        VApplyForce(forcePair.first, forcePair.second);
+        VApplyForce(m_DeferredAppliedForce[i].first, m_DeferredAppliedForce[i].second);
     }
     m_DeferredAppliedForce.clear();
 }
@@ -798,8 +833,9 @@ void ClawPhysics::VAddActorBody(const ActorBodyDef* actorBodyDef)
     }
 
     // TODO: Remove reduntant code up there... 
-    for (ActorFixtureDef actorFixtureDef : actorBodyDef->fixtureList)
+    for (size_t i = 0; i < actorBodyDef->fixtureList.size(); i++)
     {
+        ActorFixtureDef actorFixtureDef = actorBodyDef->fixtureList[i];
         // If it has 0 size, set it to body size
         if (actorFixtureDef.size.IsZeroXY())
         {
@@ -1062,7 +1098,10 @@ void ClawPhysics::SetVelocity(uint32_t actorId, const Point& velocity)
 //
 void ClawPhysics::VTranslate(uint32_t actorId, const Point& dir)
 {
-    assert(false && "VTranslate: implement me");
+    if (b2Body* pBody = FindBox2DBody(actorId))
+    {
+        pBody->SetTransform(pBody->GetPosition() + PixelsToMeters(PointToB2Vec2(dir)), pBody->GetAngle());
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -1150,7 +1189,10 @@ void ClawPhysics::VSetPosition(uint32_t actorId, const Point& position)
 //
 Point ClawPhysics::VGetPosition(uint32_t actorId)
 {
-    assert(false && "VGetPosition: implement me");
+    if (b2Body* pBody = FindBox2DBody(actorId))
+    {
+        return b2Vec2ToPoint(MetersToPixels(pBody->GetPosition()));
+    }
     return Point();
 }
 
@@ -1163,6 +1205,7 @@ void ClawPhysics::VActivate(uint32_t actorId)
 {
     if (b2Body* pBody = FindBox2DBody(actorId))
     {
+        m_ParkedBodies.erase(pBody);
         pBody->SetActive(true);
     }
 }
@@ -1176,6 +1219,7 @@ void ClawPhysics::VDeactivate(uint32_t actorId)
 {
     if (b2Body* pBody = FindBox2DBody(actorId))
     {
+        m_ParkedBodies.erase(pBody);
         pBody->SetActive(false);
     }
 }
@@ -1214,7 +1258,24 @@ SDL_Rect ClawPhysics::VGetAABB(uint32_t actorId, bool discardSensors)
     SDL_Rect aabbRect = { 0, 0, 0, 0 };
     if (b2Body* pBody = FindBox2DBody(actorId))
     {
-        b2AABB aabb = GetBodyAABB(pBody, discardSensors);
+        // The box of the body where it is now (a fixture's own AABB also covers where it was at the
+        // previous step when it moves, a few pixels off for a climbing or falling body)
+        b2AABB aabb;
+        aabb.lowerBound = b2Vec2(FLT_MAX, FLT_MAX);
+        aabb.upperBound = b2Vec2(-FLT_MAX, -FLT_MAX);
+        for (b2Fixture* pFixture = pBody->GetFixtureList(); pFixture != NULL; pFixture = pFixture->GetNext())
+        {
+            if (discardSensors && pFixture->IsSensor())
+            {
+                continue;
+            }
+            for (int32 child = 0; child < pFixture->GetShape()->GetChildCount(); child++)
+            {
+                b2AABB shapeAABB;
+                pFixture->GetShape()->ComputeAABB(&shapeAABB, pBody->GetTransform(), child);
+                aabb.Combine(aabb, shapeAABB);
+            }
+        }
         /*aabb.lowerBound = b2Vec2(FLT_MAX, FLT_MAX);
         aabb.upperBound = b2Vec2(-FLT_MAX, -FLT_MAX);
         b2Fixture* pFixture = pBody->GetFixtureList();
@@ -1398,8 +1459,8 @@ void ClawPhysics::VScaleActor(uint32_t actorId, double scale)
             }
 
             assert(pBodyRectangleFixture && pHeadCircleFixture);
-            auto a = pBodyRectangleFixture->GetFilterData();
-            auto b = pHeadCircleFixture->GetFilterData();
+            b2Filter a = pBodyRectangleFixture->GetFilterData();
+            b2Filter b = pHeadCircleFixture->GetFilterData();
             a.maskBits = 0x0;
             b.maskBits = 0x0;
 
@@ -1417,7 +1478,7 @@ void ClawPhysics::VScaleActor(uint32_t actorId, double scale)
                     continue;
                 }
                 
-                auto a = fixture->GetFilterData();
+                b2Filter a = fixture->GetFilterData();
                 a.maskBits = 0xFFFFFFFF;
                 fixture->SetFilterData(a);
 

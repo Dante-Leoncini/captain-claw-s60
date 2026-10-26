@@ -151,12 +151,14 @@ void GabrielAIStateComponent::VOnAnimationFrameChanged(Animation* pAnimation, An
 
     if (pAnimation->GetName() == m_ThrowBombAnim && pNewFrame->idx == m_ThrowBombAnimFrameIdx)
     {
-        static const SoundList s_BombFallSoundList =
+        static const char* const s_BombFallSounds[] =
         {
             "/LEVEL8/SOUNDS/GABRIELBOMB/BOMBWHISTLE1.WAV",
             "/LEVEL8/SOUNDS/GABRIELBOMB/BOMBWHISTLE2.WAV",
             "/LEVEL8/SOUNDS/GABRIELBOMB/BOMBWHISTLE3.WAV"
         };
+        static const SoundList s_BombFallSoundList(s_BombFallSounds,
+            s_BombFallSounds + sizeof(s_BombFallSounds) / sizeof(s_BombFallSounds[0]));
 
         Util::PlayRandomSoundFromList(s_BombFallSoundList);
 

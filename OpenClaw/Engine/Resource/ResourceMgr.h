@@ -21,7 +21,7 @@ public:
     virtual bool VHasResourceCache(const std::string& resCacheName) = 0;
 };
 
-typedef std::vector<std::shared_ptr<ResourceCache>> ResourceCacheList;
+typedef std::vector<std::shared_ptr<ResourceCache> > ResourceCacheList;
 class ResourceMgrImpl : public IResourceMgr
 {
 public:

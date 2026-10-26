@@ -146,7 +146,7 @@ void TriggerComponent::OnActorEntered(Actor* pActor, FixtureType triggerType)
         return;
     }
 
-    auto findIt = m_TriggerEnterSoundMap.find(triggerType);
+    TriggerToSoundMap::iterator findIt = m_TriggerEnterSoundMap.find(triggerType);
     if (findIt != m_TriggerEnterSoundMap.end())
     {
         SoundInfo soundInfo(findIt->second);
@@ -186,7 +186,7 @@ void TriggerComponent::OnActorLeft(Actor* pActor, FixtureType triggerType)
         return;
     }
 
-    auto findIt = m_TriggerLeaveSoundMap.find(triggerType);
+    TriggerToSoundMap::iterator findIt = m_TriggerLeaveSoundMap.find(triggerType);
     if (findIt != m_TriggerLeaveSoundMap.end())
     {
         SoundInfo soundInfo(findIt->second);
@@ -209,7 +209,10 @@ SDL_Rect TriggerComponent::GetTriggerArea()
     }
 
     Point triggerPosition = pPositionComponent->GetPosition();
-    triggerArea = { (int)triggerPosition.x, (int)triggerPosition.y, (int)m_Size.x, (int)m_Size.y };
+    triggerArea.x = (int)triggerPosition.x;
+    triggerArea.y = (int)triggerPosition.y;
+    triggerArea.w = (int)m_Size.x;
+    triggerArea.h = (int)m_Size.y;
 
     return triggerArea;
 }
@@ -221,7 +224,7 @@ void TriggerComponent::AddOverlappingActor(Actor* pActor)
 
 void TriggerComponent::RemoveOverlappingActor(Actor* pActor)
 {
-    for (auto iter = m_ActorsInsideList.begin(); iter != m_ActorsInsideList.end(); ++iter)
+    for (std::vector<Actor*>::iterator iter = m_ActorsInsideList.begin(); iter != m_ActorsInsideList.end(); ++iter)
     {
         if ((*iter) == pActor)
         {
@@ -248,16 +251,18 @@ bool TriggerComponent::HasOverlappingActor(Actor* pActor)
 
 void TriggerSubject::NotifyEnterTrigger(Actor* pActorWhoEntered, FixtureType triggerType)
 {
-    for (TriggerObserver* pObserver : m_Observers)
+    for (size_t i = 0; i < m_Observers.size(); i++)
     {
+        TriggerObserver* pObserver = m_Observers[i];
         pObserver->VOnActorEnteredTrigger(pActorWhoEntered, triggerType);
     }
 }
 
 void TriggerSubject::NotifyLeaveTrigger(Actor* pActorWhoLeft, FixtureType triggerType)
 {
-    for (TriggerObserver* pObserver : m_Observers)
+    for (size_t i = 0; i < m_Observers.size(); i++)
     {
+        TriggerObserver* pObserver = m_Observers[i];
         pObserver->VOnActorLeftTrigger(pActorWhoLeft, triggerType);
     }
 }

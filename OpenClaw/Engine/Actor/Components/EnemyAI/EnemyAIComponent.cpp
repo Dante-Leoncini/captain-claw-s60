@@ -23,6 +23,7 @@ EnemyAIComponent::EnemyAIComponent()
     :
     m_bInitialized(false),
     m_bDead(false),
+    m_DeathSpeed(Point(0, 0)),
     m_bHasStateLock(true),
     m_TimeSinceLastSpeechSound(0),
     m_MinTimeIntervalForSpeechSound(0)
@@ -110,9 +111,11 @@ void EnemyAIComponent::VUpdate(uint32 msDiff)
 {
     if (m_bDead)
     {
-        // I want it to disappear after ~900ms
-        Point moveDelta((600 / 900.0 * msDiff), (600 / 900.0f * msDiff));
-        m_pPositionComponent->SetPosition(m_pPositionComponent->GetX() + moveDelta.x, m_pPositionComponent->GetY() + moveDelta.y);
+        // Knocked up and away from the blow, then falling off the screen (the original game)
+        const double gravity = 0.0025; // pixels per ms^2
+        m_DeathSpeed.y += gravity * msDiff;
+        m_pPositionComponent->SetPosition(m_pPositionComponent->GetX() + m_DeathSpeed.x * msDiff,
+            m_pPositionComponent->GetY() + m_DeathSpeed.y * msDiff);
 
         // This feels like a hack
         if (HumanView* pHumanView = g_pApp->GetHumanView())
@@ -125,7 +128,8 @@ void EnemyAIComponent::VUpdate(uint32 msDiff)
 
                 SDL_Rect renderRect = m_pRenderComponent->VGetPositionRect();
                 SDL_Rect cameraRect = pCamera->GetCameraRect();
-                if (!SDL_HasIntersection(&renderRect, &cameraRect))
+                // (gone once out of sight on the way down: going up he comes back)
+                if (!SDL_HasIntersection(&renderRect, &cameraRect) && m_DeathSpeed.y > 0)
                 {
                     shared_ptr<EventData_Destroy_Actor> pEvent(new EventData_Destroy_Actor(m_pOwner->GetGUID()));
                     IEventMgr::Get()->VQueueEvent(pEvent);
@@ -144,7 +148,7 @@ void EnemyAIComponent::VUpdate(uint32 msDiff)
 
         if (!m_DeathAnimation.empty())
         {
-            auto pAnimComp = MakeStrongPtr(m_pOwner->GetComponent<AnimationComponent>(AnimationComponent::g_Name));
+            shared_ptr<AnimationComponent> pAnimComp = MakeStrongPtr(m_pOwner->GetComponent<AnimationComponent>(AnimationComponent::g_Name));
             assert(pAnimComp);
 
             pAnimComp->SetAnimation(m_DeathAnimation);
@@ -159,8 +163,9 @@ void EnemyAIComponent::VUpdate(uint32 msDiff)
 void EnemyAIComponent::VOnHealthBelowZero(DamageType damageType, int sourceActorId)
 {
     m_bDead = true;
-    for (const auto &stateComponentIter : m_StateMap)
+    for (EnemyStateMap::iterator it = m_StateMap.begin(); it != m_StateMap.end(); ++it)
     {
+        const EnemyStateMap::value_type &stateComponentIter = *it;
         if (stateComponentIter.second->IsActive())
         {
             stateComponentIter.second->VOnStateLeave(NULL);
@@ -178,6 +183,15 @@ void EnemyAIComponent::VOnHealthBelowZero(DamageType damageType, int sourceActor
     // HACK: This should be general like Subject/Observer but this is the only place so far
     // that the killed-by information is used
     StrongActorPtr pKiller = MakeStrongPtr(g_pApp->GetGameLogic()->VGetActor(sourceActorId));
+
+    // Flies away from whoever killed him (to the right when that is unknown)
+    double awayFromKiller = 1.0;
+    if (pKiller != nullptr && pKiller->GetPositionComponent() &&
+        pKiller->GetPositionComponent()->GetX() > m_pPositionComponent->GetX())
+    {
+        awayFromKiller = -1.0;
+    }
+    m_DeathSpeed = Point(0.3 * awayFromKiller, -0.6);
     if (pKiller != nullptr)
     {
         shared_ptr<ClawControllableComponent> pClaw = MakeStrongPtr(pKiller->GetComponent<ClawControllableComponent>());
@@ -233,8 +247,9 @@ bool EnemyAIComponent::VCanResistDamage(DamageType damageType, Point impactPoint
 
 void EnemyAIComponent::LeaveAllStates(BaseEnemyAIStateComponent* pNextState)
 {
-    for (const auto& stateIter : m_StateMap)
+    for (EnemyStateMap::iterator it = m_StateMap.begin(); it != m_StateMap.end(); ++it)
     {
+        const EnemyStateMap::value_type& stateIter = *it;
         if (stateIter.second->IsActive())
         {
             stateIter.second->VOnStateLeave(pNextState);
@@ -246,7 +261,7 @@ void EnemyAIComponent::EnterState(const std::string &stateName)
 {
     BaseEnemyAIStateComponent* pCurrentState = GetCurrentState();
 
-    auto findIt = m_StateMap.find(stateName);
+    EnemyStateMap::iterator findIt = m_StateMap.find(stateName);
     assert(findIt != m_StateMap.end());
 
     LeaveAllStates(findIt->second);
@@ -257,8 +272,9 @@ void EnemyAIComponent::EnterState(EnemyAIState state)
 {
     BaseEnemyAIStateComponent* pCurrentState = GetCurrentState();
 
-    for (const auto &stateIter : m_StateMap)
+    for (EnemyStateMap::iterator it = m_StateMap.begin(); it != m_StateMap.end(); ++it)
     {
+        const EnemyStateMap::value_type &stateIter = *it;
         if (stateIter.second->VGetStateType() == state)
         {
             LeaveAllStates(stateIter.second);
@@ -302,8 +318,9 @@ bool EnemyAIComponent::EnterBestState(bool canForceEnter)
     BaseEnemyAIStateComponent* pBestState = NULL;
     int bestStatePrio = -1;
 
-    for (const auto &stateIter : m_StateMap)
+    for (EnemyStateMap::iterator it = m_StateMap.begin(); it != m_StateMap.end(); ++it)
     {
+        const EnemyStateMap::value_type &stateIter = *it;
         BaseEnemyAIStateComponent* pState = stateIter.second;
         if (pState == pCurrentState)
         {
@@ -340,8 +357,9 @@ bool EnemyAIComponent::EnterBestState(bool canForceEnter)
 
 BaseEnemyAIStateComponent* EnemyAIComponent::GetCurrentState()
 {
-    for (const auto &stateIter : m_StateMap)
+    for (EnemyStateMap::iterator it = m_StateMap.begin(); it != m_StateMap.end(); ++it)
     {
+        const EnemyStateMap::value_type &stateIter = *it;
         if (stateIter.second->IsActive())
         {
             return stateIter.second;
@@ -355,8 +373,9 @@ BaseEnemyAIStateComponent* EnemyAIComponent::GetCurrentState()
 
 BaseEnemyAIStateComponent* EnemyAIComponent::GetState(EnemyAIState state)
 {
-    for (const auto &stateIter : m_StateMap)
+    for (EnemyStateMap::iterator it = m_StateMap.begin(); it != m_StateMap.end(); ++it)
     {
+        const EnemyStateMap::value_type &stateIter = *it;
         if (stateIter.second->VGetStateType() == state)
         {
             return stateIter.second;
@@ -373,8 +392,9 @@ bool EnemyAIComponent::HasState(const std::string &stateName)
 
 bool EnemyAIComponent::HasState(EnemyAIState state)
 {
-    for (const auto &stateIter : m_StateMap)
+    for (EnemyStateMap::iterator it = m_StateMap.begin(); it != m_StateMap.end(); ++it)
     {
+        const EnemyStateMap::value_type &stateIter = *it;
         if (stateIter.second->VGetStateType() == state)
         {
             return true;

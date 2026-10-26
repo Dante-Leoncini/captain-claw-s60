@@ -120,32 +120,36 @@ void HealthComponent::BroadcastHealthChanged(int32 oldHealth, int32 newHealth, D
 
 void HealthSubject::NotifyHealthChanged(int32 oldHealth, int32 newHealth, DamageType damageType, Point impactPoint, int sourceActorId)
 {
-    for (HealthObserver* pObserver : m_Observers)
+    for (size_t i = 0; i < m_Observers.size(); i++)
     {
+        HealthObserver* pObserver = m_Observers[i];
         pObserver->VOnHealthChanged(oldHealth, newHealth, damageType, impactPoint, sourceActorId);
     }
 }
 
 void HealthSubject::NotifyHealthBelowZero(DamageType damageType, int sourceActorId)
 {
-    for (HealthObserver* pObserver : m_Observers)
+    for (size_t i = 0; i < m_Observers.size(); i++)
     {
+        HealthObserver* pObserver = m_Observers[i];
         pObserver->VOnHealthBelowZero(damageType, sourceActorId);
     }
 }
 
 void HealthSubject::NotifyResistDamage(DamageType damageType, Point impactPoint)
 {
-    for (HealthObserver* pObserver : m_Observers)
+    for (size_t i = 0; i < m_Observers.size(); i++)
     {
+        HealthObserver* pObserver = m_Observers[i];
         pObserver->VOnResistDamage(damageType, impactPoint);
     }
 }
 
 bool HealthSubject::AskCanResistDamage(DamageType damageType, Point impactPoint)
 {
-    for (HealthObserver* pObserver : m_Observers)
+    for (size_t i = 0; i < m_Observers.size(); i++)
     {
+        HealthObserver* pObserver = m_Observers[i];
         if (pObserver->VCanResistDamage(damageType, impactPoint))
         {
             return true;

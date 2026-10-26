@@ -145,6 +145,10 @@ public:
     std::shared_ptr<IResourceExtraData> GetExtraData() { return _extraData; }
     void SetExtraData(std::shared_ptr<IResourceExtraData> extraData) { _extraData = extraData; }
 
+    // Frees the raw file data once the extra data holds all that is needed (an image already on the
+    // GPU), so the cache has room for what is still read from the archive (sounds)
+    void ReleaseBuffer();
+
 protected:
     Resource _resource;
     char* _buffer;
@@ -155,9 +159,9 @@ protected:
 private:
 };
 
-typedef std::list<std::shared_ptr<ResourceHandle>> ResourceHandleList;
-typedef std::list<std::shared_ptr<IResourceLoader>> ResourceLoaderList;
-typedef std::map<std::string, std::shared_ptr<ResourceHandle>> ResourceHandleMap;
+typedef std::list<std::shared_ptr<ResourceHandle> > ResourceHandleList;
+typedef std::list<std::shared_ptr<IResourceLoader> > ResourceLoaderList;
+typedef std::map<std::string, std::shared_ptr<ResourceHandle> > ResourceHandleMap;
 
 class ResourceCache
 {
@@ -178,6 +182,9 @@ public:
     std::vector<std::string> GetAllFilesInDirectory(const char* directoryPath);
 
     void Flush();
+    // Drops the cached images (.pid, .pcx, .png) whose path starts with the given (lower case) prefix.
+    // Other resources stay: palettes and sounds may still be in use through raw pointers
+    void FlushImages(const std::string& prefix);
 
     bool IsUsingDevelopmentDirectories() { assert(_resourceFile != NULL); return _resourceFile->VIsUsingDevelopmentDIrectories(); }
 
@@ -204,6 +211,9 @@ private:
     ResourceHandleList _lruList;
     ResourceLoaderList _resourceLoaderList;
     ResourceHandleMap _resourceMap;
+
+    // Match() walks every file of the archive; actors ask for the same patterns again and again
+    std::map<std::string, std::vector<std::string> > _matchCache;
 };
 
 #endif

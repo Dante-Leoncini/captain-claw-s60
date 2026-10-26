@@ -10,8 +10,8 @@
 
 #include "UserInterface.h"
 
-typedef std::list<shared_ptr<IScreenElement>> ScreenElementList;
-typedef std::list<shared_ptr<IGameView>> GameViewList;
+typedef std::list<shared_ptr<IScreenElement> > ScreenElementList;
+typedef std::list<shared_ptr<IGameView> > GameViewList;
 
 class LevelData;
 class Scene;
@@ -46,6 +46,11 @@ public:
     bool EnterMenu(TiXmlElement* pMenuData);
     void LoadScoreScreen(TiXmlElement* pScoreScreenRootElem);
     bool LoadGame(TiXmlElement* pLevelXmlElem, LevelData* pLevelData);
+
+    // The level unrolls out of black before the game starts
+    void PlayLevelStartReveal();
+    // Draws the current screen, leaving the present to the caller (for Util::FadeScreen)
+    static void DrawFrameWithoutPresent(void* pHumanView);
 
     void RegisterConsoleCommandHandler(void(*handler)(const char*, void*), void* userdata);
 
@@ -155,6 +160,11 @@ public:
     virtual void VRender(uint32 msDiff) override;
 
 private:
+    Point GetClawScreenPosition();
+    void SetClawVisible(bool visible);
+
+    shared_ptr<SceneNode> m_pCameraTarget;
+
     Point m_Epicenter;
     int m_StartDelay;
     int m_FadeInDuration;
@@ -166,6 +176,20 @@ private:
 
     Point m_FadeInSpeed;
     Point m_FadeOutSpeed;
+};
+
+class LevelRevealProcess : public SpecialEffectProcess
+{
+public:
+    LevelRevealProcess(int duration);
+
+    virtual void VOnInit() override;
+    virtual void VOnUpdate(uint32 msDiff) override;
+    virtual void VRender(uint32 msDiff) override;
+
+private:
+    int m_Duration;
+    int m_CurrentTime;
 };
 
 class PrimeSearch;
@@ -227,7 +251,7 @@ private:
 
     Point m_FragmentSize;
     SDL_Texture* m_pFadingTexture;
-    std::vector<shared_ptr<FadingLine>> m_Lines;
+    std::vector<shared_ptr<FadingLine> > m_Lines;
 };
 
 #endif

@@ -20,7 +20,7 @@ public:
 
     bool PollEvent(Touch_Event *evt);
 
-    void AddRecognizers(const std::vector<std::shared_ptr<AbstractRecognizer>> &recognizer);
+    void AddRecognizers(const std::vector<std::shared_ptr<AbstractRecognizer> > &recognizer);
     void RemoveRecognizer(int id);
     void RemoveAllRecognizers();
 
@@ -32,8 +32,8 @@ private:
 
     std::list<Touch_Event> m_EventQueue;
 
-    std::vector<std::shared_ptr<AbstractRecognizer>> m_Recognizers;
-    std::map<SDL_FingerID, std::vector<AbstractRecognizer*>> m_AttachedRecognizers;
+    std::vector<std::shared_ptr<AbstractRecognizer> > m_Recognizers;
+    std::map<SDL_FingerID, std::vector<AbstractRecognizer*> > m_AttachedRecognizers;
 };
 
 #endif

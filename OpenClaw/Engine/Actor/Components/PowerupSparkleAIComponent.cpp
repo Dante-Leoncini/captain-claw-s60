@@ -30,7 +30,7 @@ void PowerupSparkleAIComponent::VPostInit()
     assert(pAnimationComponent && pAnimationComponent->GetCurrentAnimation());
     pAnimationComponent->AddObserver(this);
 
-    srand((long)this);
+    srand((long)(size_t)this);
     //pAnimationComponent->SetDelay(rand() % 1000);
 
     int numFrames = pAnimationComponent->GetCurrentAnimation()->GetAnimFramesSize();
@@ -80,7 +80,7 @@ void PowerupSparkleAIComponent::ChooseNewPosition()
     assert(m_pTargetPositionComponent);
 
     Point targetPos = m_pTargetPositionComponent->GetPosition();
-    srand((long)this + (int)m_pPositonComponent->GetX() + (int)m_pPositonComponent->GetY() + time(NULL));
+    srand((long)(size_t)this + (int)m_pPositonComponent->GetX() + (int)m_pPositonComponent->GetY() + time(NULL));
     m_pPositonComponent->SetX(targetPos.x - m_TargetSize.x / 2 + rand() % (int)m_TargetSize.x);
     m_pPositonComponent->SetY(targetPos.y - m_TargetSize.y / 2 + rand() % (int)m_TargetSize.y);
 

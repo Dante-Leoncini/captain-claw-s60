@@ -4,6 +4,13 @@
 #include "../../GameApp/BaseGameApp.h"
 #include "ResourceCorrection.h"
 
+#include <map>
+
+// Images still in use, by path and palette: an image the resource cache has dropped while some
+// actor still shows it is reused instead of being loaded (and uploaded to the GPU) again
+typedef std::map<std::pair<std::string, WapPal*>, weak_ptr<Image> > LiveImageMap;
+static LiveImageMap s_LiveImages;
+
 //=================================================================================================
 // class PidResourceExtraData
 //
@@ -74,6 +81,16 @@ WapPid* PidResourceLoader::LoadAndReturnPid(const char* resourceString, WapPal* 
 
 shared_ptr<Image> PidResourceLoader::LoadAndReturnImage(const char* resourceString, WapPal* palette)
 {
+    const std::pair<std::string, WapPal*> liveKey(resourceString, palette);
+    LiveImageMap::iterator liveIt = s_LiveImages.find(liveKey);
+    if (liveIt != s_LiveImages.end())
+    {
+        if (shared_ptr<Image> pLiveImage = liveIt->second.lock())
+        {
+            return pLiveImage;
+        }
+    }
+
     Resource resource(resourceString);
 
     shared_ptr<ResourceHandle> handle = g_pApp->GetResourceCache()->GetHandle(&resource);
@@ -91,6 +108,7 @@ shared_ptr<Image> PidResourceLoader::LoadAndReturnImage(const char* resourceStri
         }
 
         handle->SetExtraData(extraData);
+        handle->ReleaseBuffer();
     }
     // Extra data could be created within LoadAndReturnPid but not the image
     else if (!extraData->GetImage())
@@ -104,7 +122,19 @@ shared_ptr<Image> PidResourceLoader::LoadAndReturnImage(const char* resourceStri
         }
     }
 
-    return extraData->GetImage();
+    shared_ptr<Image> pImage = extraData->GetImage();
+    if (s_LiveImages.size() > 4096)
+    {
+        for (LiveImageMap::iterator it = s_LiveImages.begin(); it != s_LiveImages.end(); )
+        {
+            if (it->second.expired())
+                s_LiveImages.erase(it++);
+            else
+                ++it;
+        }
+    }
+    s_LiveImages[liveKey] = pImage;
+    return pImage;
 }
 
 shared_ptr<PidResourceLoader> PidResourceLoader::Create()

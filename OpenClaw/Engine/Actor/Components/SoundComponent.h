@@ -21,7 +21,7 @@ public:
     weak_ptr<Mix_Chunk> GetSound(std::string soundName);
 
 private:
-    std::map<std::string, shared_ptr<Mix_Chunk>> _soundMap;
+    std::map<std::string, shared_ptr<Mix_Chunk> > _soundMap;
 };
 
 #endif

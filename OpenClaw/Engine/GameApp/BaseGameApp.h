@@ -24,6 +24,7 @@ struct GameOptions
         windowWidth = 1280;
         windowHeight = 780;
         scale = 1.0f;
+        hudScale = 0.0f;
         useVerticalSync = true;
         isFullscreen = false;
         isFullscreenDesktop = false;
@@ -44,7 +45,10 @@ struct GameOptions
 
         rezArchive = "CLAW.REZ";
         customArchive = "ASSETS.ZIP";
+        moviesArchive = "CLAW.FEC";
+        playIntroMovies = true;
         resourceCacheSize = 50;
+        preloadResources = true;
         tempDir = ".";
         savesFile = "SAVES.XML";
         userDirectory = "";
@@ -63,6 +67,9 @@ struct GameOptions
     int windowWidth;
     int windowHeight;
     double scale;
+    // Scale of the in-game HUD; 0 = the same as the game (small screens show the world at half
+    // scale but keep the HUD readable at 1:1)
+    double hudScale;
     bool useVerticalSync;
     bool isFullscreen;
     bool isFullscreenDesktop;
@@ -87,7 +94,12 @@ struct GameOptions
     std::string assetsFolder;
     std::string rezArchive;
     std::string customArchive;
+    // The original game's movies (\MOVIES\CLAW.FEC on the CD)
+    std::string moviesArchive;
+    bool playIntroMovies;
     unsigned resourceCacheSize;
+    // Load the menu screens of CLAW.REZ at startup (off on low memory devices)
+    bool preloadResources;
     std::string tempDir;
     std::string savesFile;
     // For LINUX ONLY - this is generally ~/.config/openclaw/
@@ -146,6 +158,9 @@ struct GlobalOptions
         loadAllLevelSaves = false;
         showFps = true;
         showPosition = true;
+        activeAreaMargin = 0;
+        gameSpeed = 1.0;
+        gameSavedMessage = "GAME SAVED";
     }
 
     double maxJumpSpeed;
@@ -168,6 +183,13 @@ struct GlobalOptions
     bool loadAllLevelSaves;
     bool showFps;
     bool showPosition;
+    // > 0: actors and bodies further than this many pixels outside the camera view are not
+    // simulated (slow devices). 0 simulates the whole level.
+    int activeAreaMargin;
+    // Game time per real time (1 = normal, below 1 slows the whole game down)
+    double gameSpeed;
+    // Shown when a save checkpoint is reached (the game font has upper case letters only)
+    std::string gameSavedMessage;
 };
 
 struct ControlOptions
@@ -225,8 +247,9 @@ class Audio;
 typedef std::map<std::string, std::string> LocalizedStringsMap;
 typedef std::map<std::string, TTF_Font*> FontMap;
 typedef std::map<ActorPrototype, const TiXmlElement*> ActorXmlPrototypeMap;
-typedef std::map<int, shared_ptr<LevelMetadata>> LevelMetadataMap;
+typedef std::map<int, shared_ptr<LevelMetadata> > LevelMetadataMap;
 
+class MoviePlayer;
 class BaseGameApp
 {
     // Command handler should have unlimited access
@@ -256,12 +279,18 @@ public:
     // Main loop
     int32 Run();
     void StepLoop();
+    bool IsRunning() const { return m_IsRunning; }
+
+    // Plays CLAW.FEC movies one after the other before the game goes on (a key skips each one)
+    void PlayMovies(const std::vector<int>& movieIndices);
 
     // This is provided to be used the engine
     bool LoadStrings(std::string language);
     std::string GetString(std::string stringId);
     Point GetScale();
     void SetScale(Point scale);
+    // Switches the renderer to the HUD scale; returns the previous scale to restore
+    Point BeginHUDScale();
     uint32 GetWindowFlags();
 
     inline SDL_Renderer* GetRenderer() const { return m_pRenderer; }
@@ -340,12 +369,18 @@ private:
     void RemoveAllDelegates();
 
     void QuitGameDelegate(IEventDataPtr pEventData);
+    void PlayMovieDelegate(IEventDataPtr pEventData);
 
     TiXmlDocument CreateAndReturnDefaultConfig(const char* inConfigFile);
 
     SDL_Window* m_pWindow;
     SDL_Renderer* m_pRenderer;
     WapPal* m_pPalette;
+
+    void StepMovies(uint32 elapsedTime);
+
+    MoviePlayer* m_pMoviePlayer;
+    std::vector<int> m_MovieQueue;
 
     bool m_IsRunning;
     bool m_QuitRequested;

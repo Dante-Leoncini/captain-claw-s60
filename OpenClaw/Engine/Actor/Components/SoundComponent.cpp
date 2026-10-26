@@ -21,8 +21,9 @@ bool SoundComponent::VInit(TiXmlElement* data)
         std::vector<std::string> matchingSoundNames =
             g_pApp->GetResourceCache()->Match(soundsPath);
 
-        for (const std::string& soundPath : matchingSoundNames)
+        for (size_t i = 0; i < matchingSoundNames.size(); i++)
         {
+            const std::string& soundPath = matchingSoundNames[i];
             shared_ptr<Mix_Chunk> sound = WavResourceLoader::LoadAndReturnSound(soundPath.c_str());
             if (sound == nullptr)
             {
@@ -32,7 +33,7 @@ bool SoundComponent::VInit(TiXmlElement* data)
 
             std::string soundNameKey = StripPathAndExtension(soundPath);
 
-            auto result = _soundMap.insert(std::make_pair(soundNameKey, sound));
+            std::pair<std::map<std::string, shared_ptr<Mix_Chunk> >::iterator, bool> result = _soundMap.insert(std::make_pair(soundNameKey, sound));
 
             // Check if we dont already have the sound loaded
             bool inserted = result.second;

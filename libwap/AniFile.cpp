@@ -5,7 +5,7 @@
 #include <exception>
 
 #include "libwap.h"
-#include "IO.h"
+#include "WapStream.h"
 #include "Util.h"
 
 WapAni* WAP_AniLoadFromDataImpl(char* data, size_t size)
@@ -23,18 +23,18 @@ WapAni* WAP_AniLoadFromDataImpl(char* data, size_t size)
     wapAni = new WapAni;
 
     // Set default values;
-    (*wapAni) = { 0 };
+    (*wapAni) = WapAni();
 
     InputStream aniFileStream(data, size);
     // Read first 32 bytes
-    aniFileStream.read(wapAni->signature,
-        wapAni->unk0,
-        wapAni->unk1,
-        wapAni->animationFramesCount,
-        wapAni->imageSetPathLength,
-        wapAni->unk2,
-        wapAni->unk3,
-        wapAni->unk4);
+    aniFileStream.read(wapAni->signature);
+    aniFileStream.read(wapAni->unk0);
+    aniFileStream.read(wapAni->unk1);
+    aniFileStream.read(wapAni->animationFramesCount);
+    aniFileStream.read(wapAni->imageSetPathLength);
+    aniFileStream.read(wapAni->unk2);
+    aniFileStream.read(wapAni->unk3);
+    aniFileStream.read(wapAni->unk4);
 
     // Check if loaded file at leasr resembles ANI file format since there is no checksum
     if ((wapAni->animationFramesCount == 0) ||
@@ -57,19 +57,19 @@ WapAni* WAP_AniLoadFromDataImpl(char* data, size_t size)
         AniAnimationFrame& animFrame = wapAni->animationFrames[i];
 
         // Set default values
-        animFrame = { 0 };
+        animFrame = AniAnimationFrame();
 
-        aniFileStream.read(animFrame.triggeredEventFlag,
-            animFrame.unk0,
-            animFrame.unk1,
-            animFrame.unk2,
-            animFrame.imageFileId,
-            animFrame.duration,
-            animFrame.unk3,
-            animFrame.unk4,
-            animFrame.unk5,
-            animFrame.unk6,
-            animFrame.unk7);
+        aniFileStream.read(animFrame.triggeredEventFlag);
+        aniFileStream.read(animFrame.unk0);
+        aniFileStream.read(animFrame.unk1);
+        aniFileStream.read(animFrame.unk2);
+        aniFileStream.read(animFrame.imageFileId);
+        aniFileStream.read(animFrame.duration);
+        aniFileStream.read(animFrame.unk3);
+        aniFileStream.read(animFrame.unk4);
+        aniFileStream.read(animFrame.unk5);
+        aniFileStream.read(animFrame.unk6);
+        aniFileStream.read(animFrame.unk7);
     
         if (animFrame.triggeredEventFlag == 2)
         {
@@ -107,7 +107,7 @@ WapAni* WAP_AniLoadFromFile(char* aniFilePath)
         return NULL;
     }
 
-    return WAP_AniLoadFromData(aniFileContents.data(), aniFileContents.size());
+    return WAP_AniLoadFromData((aniFileContents.empty() ? NULL : &aniFileContents[0]), aniFileContents.size());
 }
 
 WapAni* WAP_AniLoadFromRezFile(RezFile* rezFile)

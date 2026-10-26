@@ -185,7 +185,7 @@ void KinematicComponent::VUpdate(uint32 msDiff)
 
 void KinematicComponent::RemoveCarriedBody(b2Body* pBody)
 {
-    for (auto iter = m_CarriedBodiesList.begin(); iter != m_CarriedBodiesList.end(); ++iter)
+    for (std::vector<b2Body*>::iterator iter = m_CarriedBodiesList.begin(); iter != m_CarriedBodiesList.end(); ++iter)
     {
         if ((*iter) == pBody)
         {
@@ -248,8 +248,9 @@ void KinematicComponent::OnMoved(Point newPosition)
     std::vector<b2Body*> uniqueCarriedBodies = m_CarriedBodiesList;
     std::sort(uniqueCarriedBodies.begin(), uniqueCarriedBodies.end());
     uniqueCarriedBodies.erase(std::unique(uniqueCarriedBodies.begin(), uniqueCarriedBodies.end()), uniqueCarriedBodies.end());
-    for (b2Body* pCarriedBody : uniqueCarriedBodies)
+    for (size_t i = 0; i < uniqueCarriedBodies.size(); i++)
     {
+        b2Body* pCarriedBody = uniqueCarriedBodies[i];
         if (pCarriedBody->GetType() == b2_dynamicBody)
         {
             Actor* pActor = (Actor*)pCarriedBody->GetUserData();

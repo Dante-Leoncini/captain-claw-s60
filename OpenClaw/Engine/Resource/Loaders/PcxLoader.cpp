@@ -30,7 +30,10 @@ shared_ptr<Image> PcxResourceLoader::LoadAndReturnImage(const char* resourceStri
 
     shared_ptr<ResourceHandle> handle = g_pApp->GetResourceCache()->GetHandle(&resource);
     //shared_ptr<ResourceHandle> handle = g_pApp->GetResourceMgr()->VGetHandle(&resource);
-    assert(handle != nullptr);
+    if (handle == nullptr)
+    {
+        return nullptr;
+    }
 
     shared_ptr<PcxResourceExtraData> extraData = std::static_pointer_cast<PcxResourceExtraData>(handle->GetExtraData());
     if (!extraData)

@@ -2,7 +2,7 @@
 #include "MainLoop.h"
 #include <fstream>
 
-#if !(defined(__ANDROID__) || defined(__WINDOWS__))
+#if !(defined(__ANDROID__) || defined(__WINDOWS__) || defined(SDL2LITE))
 #include <pwd.h>
 #include <unistd.h>
 #endif
@@ -11,7 +11,7 @@
 #include <emscripten.h>
 #endif
 
-int RunGameEngine(int argc, char** argv)
+int InitGameEngine(int argc, char** argv)
 {
     if (SDL_SetThreadPriority(SDL_THREAD_PRIORITY_HIGH) != 0)
     {
@@ -22,7 +22,7 @@ int RunGameEngine(int argc, char** argv)
 
 #if defined(__ANDROID__)
     userDirectory = "/sdcard/claw/";
-#elif defined(__WINDOWS__)
+#elif defined(__WINDOWS__) || defined(SDL2LITE)
     userDirectory = "";
 #else
     const char* homedir;
@@ -67,8 +67,30 @@ int RunGameEngine(int argc, char** argv)
         return -1;
     }
 
+    return 0;
+}
+
+int RunGameEngine(int argc, char** argv)
+{
+    int result = InitGameEngine(argc, argv);
+    if (result != 0)
+    {
+        return result;
+    }
+
     // Run the game
     return g_pApp->Run();
+}
+
+bool StepGameEngine()
+{
+    g_pApp->StepLoop();
+    return g_pApp->IsRunning();
+}
+
+void ShutdownGameEngine()
+{
+    g_pApp->Terminate();
 }
 
 bool TryToFindFile(const char *path) {

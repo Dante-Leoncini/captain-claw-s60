@@ -90,11 +90,11 @@ void ClawGameLogic::PlayerActorAssignmentDelegate(IEventDataPtr pEventData)
 {
     shared_ptr<EventData_Attach_Actor> pCastEventData = static_pointer_cast<EventData_Attach_Actor>(pEventData);
 
-    for (const shared_ptr<IGameView>& pView : m_GameViews)
+    for (GameViewList::iterator pView = m_GameViews.begin(); pView != m_GameViews.end(); ++pView)
     {
-        if (pView->VGetType() == GameView_Human)
+        if ((*pView)->VGetType() == GameView_Human)
         {
-            shared_ptr<ClawHumanView> pHumanView = static_pointer_cast<ClawHumanView, IGameView>(pView);
+            shared_ptr<ClawHumanView> pHumanView = static_pointer_cast<ClawHumanView, IGameView>(*pView);
             pHumanView->VSetControlledActor(pCastEventData->GetActorId());
             return;
         }
@@ -384,10 +384,10 @@ void ClawGameLogic::CheckpointReachedDelegate(IEventDataPtr pEventData)
     {
         CheckpointSave checkpointSave;
         
-        auto pScoreComponent = MakeStrongPtr(pActor->GetComponent<ScoreComponent>(ScoreComponent::g_Name));
-        auto pHealthComponent = MakeStrongPtr(pActor->GetComponent<HealthComponent>(HealthComponent::g_Name));
-        auto pLifeComponent = MakeStrongPtr(pActor->GetComponent<LifeComponent>(LifeComponent::g_Name));
-        auto pAmmoComponent = MakeStrongPtr(pActor->GetComponent<AmmoComponent>(AmmoComponent::g_Name));
+        shared_ptr<ScoreComponent> pScoreComponent = MakeStrongPtr(pActor->GetComponent<ScoreComponent>(ScoreComponent::g_Name));
+        shared_ptr<HealthComponent> pHealthComponent = MakeStrongPtr(pActor->GetComponent<HealthComponent>(HealthComponent::g_Name));
+        shared_ptr<LifeComponent> pLifeComponent = MakeStrongPtr(pActor->GetComponent<LifeComponent>(LifeComponent::g_Name));
+        shared_ptr<AmmoComponent> pAmmoComponent = MakeStrongPtr(pActor->GetComponent<AmmoComponent>(AmmoComponent::g_Name));
         assert(pScoreComponent);
         assert(pHealthComponent);
         assert(pLifeComponent);
@@ -439,8 +439,10 @@ void ClawGameLogic::ClawDiedDelegate(IEventDataPtr pEventData)
     }
     else
     {
-        double deltaY = raycastDown.deltaY - m_pPhysics->VGetAABB(pActor->GetGUID(), true).h / 2;
-        spawnPoint = spawnPoint + Point(0, deltaY - 9);
+        // Feet right on the floor (a pixel above: one-way platforms only hold what is over them)
+        const SDL_Rect body = m_pPhysics->VGetAABB(pActor->GetGUID(), true);
+        const double feetBelowPosition = body.y + body.h - m_pPhysics->VGetPosition(pActor->GetGUID()).y;
+        spawnPoint.y = spawnPoint.y + raycastDown.deltaY - feetBelowPosition - 1;
     }
 
     pEventMgr->VQueueEvent(IEventDataPtr(new EventData_Teleport_Actor(pCastEventData->GetActorId(), spawnPoint)));

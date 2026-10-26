@@ -5,7 +5,7 @@
 #include "../ActorComponent.h"
 
 class Image;
-typedef std::map<std::string, shared_ptr<Image>> ImageMap;
+typedef std::map<std::string, shared_ptr<Image> > ImageMap;
 
 //=================================================================================================
 // BaseRenderComponent Declaration

@@ -2345,6 +2345,29 @@ public:
 };
 
 //---------------------------------------------------------------------------------------------------------------------
+// EventData_Menu_Play_Movie - plays a movie of CLAW.FEC (Replay Movies menu)
+//---------------------------------------------------------------------------------------------------------------------
+class EventData_Menu_Play_Movie : public BaseEventData
+{
+public:
+    static const EventType sk_EventType;
+
+    EventData_Menu_Play_Movie(int movieIndex = 0) : m_MovieIndex(movieIndex) { }
+
+    virtual const EventType& VGetEventType(void) const { return sk_EventType; }
+    virtual IEventDataPtr VCopy() const { return IEventDataPtr(new EventData_Menu_Play_Movie(m_MovieIndex)); }
+    virtual void VSerialize(std::ostringstream& out) const { out << m_MovieIndex; }
+    virtual void VDeserialize(std::istringstream& in) { in >> m_MovieIndex; }
+
+    virtual const char* GetName(void) const { return "EventData_Menu_Play_Movie"; }
+
+    int GetMovieIndex() const { return m_MovieIndex; }
+
+private:
+    int m_MovieIndex;
+};
+
+//---------------------------------------------------------------------------------------------------------------------
 // EventData_Set_Volume
 //---------------------------------------------------------------------------------------------------------------------
 class EventData_Set_Volume : public BaseEventData

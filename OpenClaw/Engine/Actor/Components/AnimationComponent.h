@@ -55,7 +55,7 @@ struct SpecialAnimation
     bool setPositionDelay;
 };
 
-typedef std::map<std::string, std::shared_ptr<Animation>> AnimationMap;
+typedef std::map<std::string, std::shared_ptr<Animation> > AnimationMap;
 
 class Image;
 class ActorRenderComponent;

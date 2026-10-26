@@ -40,6 +40,11 @@ namespace Util
 
     void RenderForcePresent(SDL_Renderer* pRenderer);
 
+    // Draws frames (drawFrame, which must not present) under black that goes from one opacity to
+    // another (0-255) in durationMs: fades to and from black between screens
+    typedef void (*DrawFrameFunction)(void* pUserData);
+    void FadeScreen(DrawFrameFunction drawFrame, void* pUserData, int fromAlpha, int toAlpha, Uint32 durationMs);
+
     void Sleep(Uint32 ms);
 
     void PlayRandomHitSound();

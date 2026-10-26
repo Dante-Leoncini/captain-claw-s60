@@ -12,7 +12,25 @@
 
 #include <cctype>
 
-std::map<std::string, MenuPage> g_StringToMenuPageEnumMap =
+template <typename T>
+struct StringMapEntry
+{
+    const char* key;
+    T value;
+};
+
+template <typename T, size_t N>
+static std::map<std::string, T> MakeStringMap(const StringMapEntry<T> (&entries)[N])
+{
+    std::map<std::string, T> result;
+    for (size_t i = 0; i < N; i++)
+    {
+        result.insert(std::make_pair(std::string(entries[i].key), entries[i].value));
+    }
+    return result;
+}
+
+static const StringMapEntry<MenuPage> g_StringToMenuPageEnumEntries[] =
 {
     { "MenuPage_Main",                          MenuPage_Main },
     { "MenuPage_SinglePlayer",                  MenuPage_SinglePlayer },
@@ -55,7 +73,9 @@ std::map<std::string, MenuPage> g_StringToMenuPageEnumMap =
     { "MenuPage_EndLife",                       MenuPage_EndLife }
 };
 
-std::map<std::string, SDL_Scancode> g_StringToSDLKeyCodeMap =
+std::map<std::string, MenuPage> g_StringToMenuPageEnumMap = MakeStringMap(g_StringToMenuPageEnumEntries);
+
+static const StringMapEntry<SDL_Scancode> g_StringToSDLKeyCodeEntries[] =
 {
     { "Escape", SDL_SCANCODE_ESCAPE },
     { "Space",  SDL_SCANCODE_SPACE },
@@ -99,7 +119,9 @@ std::map<std::string, SDL_Scancode> g_StringToSDLKeyCodeMap =
     { "RightArrow", SDL_SCANCODE_RIGHT },
 };
 
-std::map<std::string, MenuItemType> g_StringToMenuItemType =
+std::map<std::string, SDL_Scancode> g_StringToSDLKeyCodeMap = MakeStringMap(g_StringToSDLKeyCodeEntries);
+
+static const StringMapEntry<MenuItemType> g_StringToMenuItemTypeEntries[] =
 {
     { "Text",       MenuItemType_Text },
     { "Button",     MenuItemType_Button },
@@ -107,15 +129,7 @@ std::map<std::string, MenuItemType> g_StringToMenuItemType =
     { "Image",      MenuItemType_Image },
 };
 
-static SDL_Rect GetScreenRect()
-{
-    Point windowSize = g_pApp->GetWindowSize();
-    Point scale = g_pApp->GetScale();
-    int targetWidth = (int)(windowSize.x / scale.x);
-    int targetHeight = (int)(windowSize.y / scale.y);
-
-    return { 0, 0, targetWidth, targetHeight };
-}
+std::map<std::string, MenuItemType> g_StringToMenuItemType = MakeStringMap(g_StringToMenuItemTypeEntries);
 
 static shared_ptr<Image> TryLoadPcxImageFromXmlElement(TiXmlElement* pElem)
 {
@@ -128,7 +142,49 @@ static shared_ptr<Image> TryLoadPcxImageFromXmlElement(TiXmlElement* pElem)
     // This should not happen
     assert(!imagePath.empty());
 
-    return PcxResourceLoader::LoadAndReturnImage(imagePath.c_str(), true, { 0, 0, 0, 0 });
+    SDL_Color colorKey = { 0, 0, 0, 0 };
+    return PcxResourceLoader::LoadAndReturnImage(imagePath.c_str(), true, colorKey);
+}
+
+static std::string FileNameOf(const std::string& path)
+{
+    size_t slash = path.find_last_of('/');
+    return slash == std::string::npos ? path : path.substr(slash + 1);
+}
+
+// CLAW.REZ releases name some menu images differently ("003_endlife.pcx" instead of
+// "003_clawicide.pid"). When the requested image is missing, take the one with the same
+// number in that directory.
+static std::string ResolveRezImagePath(const std::string& imagePath)
+{
+    size_t slash = imagePath.find_last_of('/');
+    if (slash == std::string::npos)
+    {
+        return imagePath;
+    }
+    std::string directory = imagePath.substr(0, slash + 1);
+    std::string name = imagePath.substr(slash + 1);
+    std::vector<std::string> files = g_pApp->GetResourceCache()->GetAllFilesInDirectory(directory.c_str());
+
+    size_t underscore = name.find('_');
+    std::string prefix = underscore == std::string::npos ? std::string() : name.substr(0, underscore + 1);
+    std::string candidate;
+    for (size_t i = 0; i < files.size(); i++)
+    {
+        std::string fileName = FileNameOf(files[i]);
+        std::transform(fileName.begin(), fileName.end(), fileName.begin(), (int(*)(int)) std::tolower);
+        if (fileName == name)
+        {
+            return imagePath;
+        }
+        if (!prefix.empty() && candidate.empty() && fileName.compare(0, prefix.size(), prefix) == 0 &&
+            fileName.size() > 4 && (fileName.substr(fileName.size() - 4) == ".pcx" || fileName.substr(fileName.size() - 4) == ".pid"))
+        {
+            candidate = directory + fileName;
+        }
+    }
+
+    return candidate.empty() ? imagePath : candidate;
 }
 
 static shared_ptr<Image> LoadImageFromXmlElement(TiXmlElement* pElem)
@@ -149,12 +205,18 @@ static shared_ptr<Image> LoadImageFromXmlElement(TiXmlElement* pElem)
     std::transform(imagePath.begin(), imagePath.end(), imagePath.begin(), (int(*)(int)) std::tolower);
 
     // We are ASSUMING here that all PCXs are from original CLAW.REZ archive
+    if (imagePath.size() > 4 && (imagePath.substr(imagePath.size() - 4) == ".pcx" || imagePath.substr(imagePath.size() - 4) == ".pid"))
+    {
+        imagePath = ResolveRezImagePath(imagePath);
+    }
+
     // For our own purpose we will use PNGs or JPEGs
     std::string extension = imagePath.substr(imagePath.length() - 4);
     shared_ptr<Image> pImage;
     if (extension == ".pcx")
     {
-        pImage = PcxResourceLoader::LoadAndReturnImage(imagePath.c_str(), true, { 0, 0, 0, 0 });
+        SDL_Color colorKey = { 0, 0, 0, 0 };
+        pImage = PcxResourceLoader::LoadAndReturnImage(imagePath.c_str(), true, colorKey);
     }
     else if (extension == ".png")
     {
@@ -199,7 +261,7 @@ static MenuItemType StringToMenuItemTypeEnum(const std::string& str)
 
 static MenuPage StringToMenuPageEnum(const std::string& str)
 {
-    auto findIt = g_StringToMenuPageEnumMap.find(str);
+    std::map<std::string, MenuPage>::iterator findIt = g_StringToMenuPageEnumMap.find(str);
     if (findIt == g_StringToMenuPageEnumMap.end())
     {
         LOG_ERROR("Conflicting string: " + str);
@@ -211,7 +273,7 @@ static MenuPage StringToMenuPageEnum(const std::string& str)
 
 static SDL_Scancode StringToSDLKeycode(const std::string& str)
 {
-    auto findIt = g_StringToSDLKeyCodeMap.find(str);
+    std::map<std::string, SDL_Scancode>::iterator findIt = g_StringToSDLKeyCodeMap.find(str);
     if (findIt == g_StringToSDLKeyCodeMap.end())
     {
         LOG_ERROR("Conflicting string: " + str);
@@ -244,7 +306,7 @@ static MenuItemState StringToMenuItemStateEnum(const std::string& str)
 
 static MenuItemType StringToMenuItemType(const std::string& str)
 {
-    auto findIt = g_StringToMenuItemType.find(str);
+    std::map<std::string, MenuItemType>::iterator findIt = g_StringToMenuItemType.find(str);
     if (findIt == g_StringToMenuItemType.end())
     {
         LOG_ERROR("Conflicting string: " + str);
@@ -285,6 +347,13 @@ static IEventDataPtr XmlElemToGeneratedEvent(TiXmlElement* pElem)
     else if (eventType == "QuitGame")
     {
         pEventData.reset(new EventData_Quit_Game());
+    }
+    else if (eventType == "PlayMovie")
+    {
+        int movieIndex = 0;
+        ParseValueFromXmlElem(&movieIndex, pElem->FirstChildElement("MovieIndex"));
+
+        pEventData.reset(new EventData_Menu_Play_Movie(movieIndex));
     }
     else if (eventType == "ChangeSoundEnabled")
     {
@@ -368,6 +437,26 @@ static IEventDataPtr XmlElemToGeneratedEvent(TiXmlElement* pElem)
 }
 
 Point g_MenuScale = Point(1.0, 1.0);
+// Menus keep their 640x480 aspect: uniform scale, centered (portrait screens get bars)
+Point g_MenuOffset = Point(0.0, 0.0);
+
+static void UpdateMenuLayout(int menuWidth, int menuHeight)
+{
+    Point windowSize = g_pApp->GetWindowSize();
+    double scale = std::min(windowSize.x / menuWidth, windowSize.y / menuHeight);
+    g_MenuScale.Set(scale, scale);
+    g_MenuOffset.Set((int)((windowSize.x - menuWidth * scale) / 2), (int)((windowSize.y - menuHeight * scale) / 2));
+}
+
+static SDL_Rect GetMenuBackgroundRect(int menuWidth, int menuHeight)
+{
+    SDL_Rect rect;
+    rect.x = (int)g_MenuOffset.x;
+    rect.y = (int)g_MenuOffset.y;
+    rect.w = (int)(menuWidth * g_MenuScale.x);
+    rect.h = (int)(menuHeight * g_MenuScale.y);
+    return rect;
+}
 
 //-----------------------------------------------------------------------------
 //
@@ -433,8 +522,9 @@ void ScreenElementMenu::VOnRender(uint32 msDiff)
     assert(m_pBackground != nullptr);
     assert(m_pBackground->GetTexture() != NULL);
 
-    SDL_Rect backgroundRect = GetScreenRect();
-    SDL_RenderCopy(m_pRenderer, m_pBackground->GetTexture(), &backgroundRect, NULL);
+    UpdateMenuLayout(m_pBackground->GetWidth(), m_pBackground->GetHeight());
+    SDL_Rect targetRect = GetMenuBackgroundRect(m_pBackground->GetWidth(), m_pBackground->GetHeight());
+    SDL_RenderCopy(m_pRenderer, m_pBackground->GetTexture(), NULL, &targetRect);
 
     assert(m_pActiveMenuPage);
     m_pActiveMenuPage->VOnRender(msDiff);
@@ -580,7 +670,7 @@ bool ScreenElementMenu::Initialize(TiXmlElement* pElem)
     // Lets just assume that the background will take the whole screen
     // From that we can calculate current scale (can't use predefined scale here)
     Point windowSize = g_pApp->GetWindowSize();
-    g_MenuScale.Set(windowSize.x / m_pBackground->GetWidth(), windowSize.y / m_pBackground->GetHeight());
+    UpdateMenuLayout(m_pBackground->GetWidth(), m_pBackground->GetHeight());
 
     return true;
 }
@@ -591,7 +681,7 @@ void ScreenElementMenu::SwitchPageDelegate(IEventDataPtr pEventData)
         static_pointer_cast<EventData_Menu_SwitchPage>(pEventData);
 
     MenuPage pageType = StringToMenuPageEnum(pCastEventData->GetNewPageName());
-    auto findIt = m_MenuPageMap.find(pageType);
+    MenuPageMap::iterator findIt = m_MenuPageMap.find(pageType);
     if (findIt != m_MenuPageMap.end())
     {
         m_pActiveMenuPage = findIt->second;
@@ -676,8 +766,9 @@ ScreenElementMenuPage::~ScreenElementMenuPage()
 
 void ScreenElementMenuPage::VOnUpdate(uint32 msDiff)
 {
-    for (shared_ptr<ScreenElementMenuItem> pMenuItem : m_MenuItems)
+    for (size_t i = 0; i < m_MenuItems.size(); i++)
     {
+        shared_ptr<ScreenElementMenuItem> pMenuItem = m_MenuItems[i];
         pMenuItem->VOnUpdate(msDiff);
     }
 }
@@ -688,12 +779,13 @@ void ScreenElementMenuPage::VOnRender(uint32 msDiff)
     {
         assert(m_pBackground->GetTexture() != NULL);
 
-        SDL_Rect backgroundRect = GetScreenRect();
-        SDL_RenderCopy(m_pRenderer, m_pBackground->GetTexture(), &backgroundRect, NULL);
+        SDL_Rect targetRect = GetMenuBackgroundRect(m_pBackground->GetWidth(), m_pBackground->GetHeight());
+        SDL_RenderCopy(m_pRenderer, m_pBackground->GetTexture(), NULL, &targetRect);
     }
 
-    for (shared_ptr<ScreenElementMenuItem> pMenuItem : m_MenuItems)
+    for (size_t i = 0; i < m_MenuItems.size(); i++)
     {
+        shared_ptr<ScreenElementMenuItem> pMenuItem = m_MenuItems[i];
         if (pMenuItem->VIsVisible())
         {
             pMenuItem->VOnRender(msDiff);
@@ -765,13 +857,14 @@ bool ScreenElementMenuPage::VOnEvent(SDL_Event& evt)
         if (evt.button.button == SDL_BUTTON_LEFT)
         {
             SDL_Rect clickRect;
-            clickRect.x = (int)(evt.button.x / g_MenuScale.x);
-            clickRect.y = (int)(evt.button.y / g_MenuScale.y);
+            clickRect.x = (int)((evt.button.x - g_MenuOffset.x) / g_MenuScale.x);
+            clickRect.y = (int)((evt.button.y - g_MenuOffset.y) / g_MenuScale.y);
             clickRect.w = 1;
             clickRect.h = 1;
 
-            for (shared_ptr<ScreenElementMenuItem> pMenuItem : m_MenuItems)
+            for (size_t i = 0; i < m_MenuItems.size(); i++)
             {
+                shared_ptr<ScreenElementMenuItem> pMenuItem = m_MenuItems[i];
                 SDL_Rect itemRect = pMenuItem->GetMenuItemRect();
                 if (SDL_HasIntersection(&clickRect, &itemRect))
                 {
@@ -786,8 +879,9 @@ bool ScreenElementMenuPage::VOnEvent(SDL_Event& evt)
         }
     }
 
-    for (shared_ptr<ScreenElementMenuItem> pMenuItem : m_MenuItems)
+    for (size_t i = 0; i < m_MenuItems.size(); i++)
     {
+        shared_ptr<ScreenElementMenuItem> pMenuItem = m_MenuItems[i];
         if (pMenuItem->VOnEvent(evt))
         {
             return true;
@@ -817,6 +911,11 @@ bool ScreenElementMenuPage::Initialize(TiXmlElement* pElem)
             LOG_ERROR("Could not initialize menu item");
             return false;
         }
+        if (pItem->HasMissingImages())
+        {
+            LOG_WARNING("Skipping menu item without images in CLAW.REZ: " + pItem->GetName());
+            continue;
+        }
 
         m_MenuItems.push_back(pItem);
     }
@@ -829,7 +928,7 @@ bool ScreenElementMenuPage::Initialize(TiXmlElement* pElem)
         std::string keyStr;
         DO_AND_CHECK(ParseValueFromXmlElem(&keyStr, pKeyboardEvent->FirstChildElement("KeyType")));
 
-        auto findIt = g_StringToSDLKeyCodeMap.find(keyStr);
+        std::map<std::string, SDL_Scancode>::iterator findIt = g_StringToSDLKeyCodeMap.find(keyStr);
         if (findIt == g_StringToSDLKeyCodeMap.end())
         {
             LOG_ERROR("Failed to find corresponding SDL key to : " + keyStr);
@@ -852,8 +951,9 @@ bool ScreenElementMenuPage::Initialize(TiXmlElement* pElem)
 
 void ScreenElementMenuPage::DeactivateAllMenuItems()
 {
-    for (shared_ptr<ScreenElementMenuItem> pMenuItem : m_MenuItems)
+    for (size_t i = 0; i < m_MenuItems.size(); i++)
     {
+        shared_ptr<ScreenElementMenuItem> pMenuItem = m_MenuItems[i];
         if (pMenuItem->GetState() == MenuItemState_Active)
         {
             pMenuItem->SetState(MenuItemState_Inactive);
@@ -864,8 +964,9 @@ void ScreenElementMenuPage::DeactivateAllMenuItems()
 int ScreenElementMenuPage::GetActiveMenuItemIdx()
 {
     int idx = 0;
-    for (shared_ptr<ScreenElementMenuItem> pMenuItem : m_MenuItems)
+    for (size_t i = 0; i < m_MenuItems.size(); i++)
     {
+        shared_ptr<ScreenElementMenuItem> pMenuItem = m_MenuItems[i];
         if (pMenuItem->GetState() == MenuItemState_Active)
         {
             return idx;
@@ -878,8 +979,9 @@ int ScreenElementMenuPage::GetActiveMenuItemIdx()
 
 shared_ptr<ScreenElementMenuItem> ScreenElementMenuPage::GetActiveMenuItem()
 {
-    for (shared_ptr<ScreenElementMenuItem> pMenuItem : m_MenuItems)
+    for (size_t i = 0; i < m_MenuItems.size(); i++)
     {
+        shared_ptr<ScreenElementMenuItem> pMenuItem = m_MenuItems[i];
         if (pMenuItem->GetState() == MenuItemState_Active)
         {
             return pMenuItem;
@@ -945,8 +1047,9 @@ void ScreenElementMenuPage::OnPageLoaded()
 
 shared_ptr<ScreenElementMenuItem> ScreenElementMenuPage::FindMenuItemByName(std::string name)
 {
-    for (shared_ptr<ScreenElementMenuItem> pMenuItem : m_MenuItems)
+    for (size_t i = 0; i < m_MenuItems.size(); i++)
     {
+        shared_ptr<ScreenElementMenuItem> pMenuItem = m_MenuItems[i];
         if (pMenuItem->GetName() == name)
         {
             return pMenuItem;
@@ -967,7 +1070,8 @@ ScreenElementMenuItem::ScreenElementMenuItem(SDL_Renderer* pRenderer)
     m_pRenderer(pRenderer),
     m_State(MenuItemState_None),
     m_Hotkey(SDL_SCANCODE_UNKNOWN),
-    m_bVisible(true)
+    m_bVisible(true),
+    m_bHasMissingImages(false)
 {
 
 }
@@ -1002,8 +1106,8 @@ void ScreenElementMenuItem::VOnRender(uint32 msDiff)
     }
 
     SDL_Rect renderRect;
-    renderRect.x = (int)((m_Position.x + pCurrImage->GetOffsetX()) * g_MenuScale.x);
-    renderRect.y = (int)(m_Position.y * g_MenuScale.y);
+    renderRect.x = (int)(g_MenuOffset.x + (m_Position.x + pCurrImage->GetOffsetX()) * g_MenuScale.x);
+    renderRect.y = (int)(g_MenuOffset.y + m_Position.y * g_MenuScale.y);
     renderRect.w = (int)(pCurrImage->GetWidth() * g_MenuScale.x);
     renderRect.h = (int)(pCurrImage->GetHeight() * g_MenuScale.y);
 
@@ -1027,11 +1131,12 @@ bool ScreenElementMenuItem::VOnEvent(SDL_Event& evt)
 
     if (evt.type == SDL_KEYDOWN)
     {
-        auto findIt = m_KeyToEventMap.find(SDL_GetScancodeFromKey(evt.key.keysym.sym));
+        KeyToEventMap::iterator findIt = m_KeyToEventMap.find(SDL_GetScancodeFromKey(evt.key.keysym.sym));
         if (findIt != m_KeyToEventMap.end())
         {
-            for (IEventDataPtr pEvent : findIt->second)
+            for (size_t i = 0; i < findIt->second.size(); i++)
             {
+                IEventDataPtr pEvent = findIt->second[i];
                 IEventMgr::Get()->VQueueEvent(pEvent);
             }
         }
@@ -1136,17 +1241,34 @@ bool ScreenElementMenuItem::Initialize(TiXmlElement* pElem)
 
     ParseValueFromXmlElem(&m_bVisible, pElem->FirstChildElement("IsVisible"));
 
-    if (shared_ptr<Image> pImage = LoadImageFromXmlElement(pElem->FirstChildElement("DisabledImage")))
+    const char* imageElemNames[] = { "DisabledImage", "InactiveImage", "ActiveImage" };
+    const MenuItemState imageStates[] = { MenuItemState_Disabled, MenuItemState_Inactive, MenuItemState_Active };
+    for (int i = 0; i < 3; i++)
     {
-        m_Images.insert(std::make_pair(MenuItemState_Disabled, pImage));
+        TiXmlElement* pImageElem = pElem->FirstChildElement(imageElemNames[i]);
+        if (shared_ptr<Image> pImage = LoadImageFromXmlElement(pImageElem))
+        {
+            m_Images.insert(std::make_pair(imageStates[i], pImage));
+        }
+        else if (pImageElem && pImageElem->GetText() && strlen(pImageElem->GetText()) > 5)
+        {
+            m_bHasMissingImages = true;
+        }
     }
-    if (shared_ptr<Image> pImage = LoadImageFromXmlElement(pElem->FirstChildElement("InactiveImage")))
+
+    // Positions in MENU.xml center the English menu texts on the 640 wide menu. Other CLAW.REZ
+    // languages have texts of other widths: keep those items centered.
+    MenuItemImageMap::iterator inactiveIt = m_Images.find(MenuItemState_Inactive);
+    if (inactiveIt != m_Images.end() && inactiveIt->second)
     {
-        m_Images.insert(std::make_pair(MenuItemState_Inactive, pImage));
-    }
-    if (shared_ptr<Image> pImage = LoadImageFromXmlElement(pElem->FirstChildElement("ActiveImage")))
-    {
-        m_Images.insert(std::make_pair(MenuItemState_Active, pImage));
+        const double menuCenterX = 320.0;
+        const double width = inactiveIt->second->GetWidth();
+        const double designedWidth = 2.0 * (menuCenterX - m_Position.x);
+        if (designedWidth > 0.0 && width > designedWidth * 0.4 && width < designedWidth * 4.0)
+        {
+            m_Position.x = menuCenterX - width / 2.0;
+            m_DefaultPosition.x = m_Position.x;
+        }
     }
 
     /*for (TiXmlElement* pMenuItemImageElem = pElem->FirstChildElement("MenuItemImage");
@@ -1270,6 +1392,10 @@ bool ScreenElementMenuItem::Initialize(TiXmlElement* pElem)
 
     if (m_Images.empty())
     {
+        if (m_bHasMissingImages)
+        {
+            return true;
+        }
         LOG_ERROR("No images for menu item: " + m_Name);
         return false;
     }
@@ -1288,8 +1414,9 @@ bool ScreenElementMenuItem::Press()
 
         Focus();
 
-        for (IEventDataPtr pEvent : m_GeneratedEventList)
+        for (size_t i = 0; i < m_GeneratedEventList.size(); i++)
         {
+            IEventDataPtr pEvent = m_GeneratedEventList[i];
             IEventMgr::Get()->VQueueEvent(pEvent);
         }
         
@@ -1349,20 +1476,22 @@ bool ScreenElementMenuItem::Focus()
 
 void ScreenElementMenuItem::OnStateChanged(MenuItemState newState, MenuItemState oldState)
 {
-    auto stateEnterFindIt = m_StateEnterEventMap.find(newState);
+    StateChangeEventMap::iterator stateEnterFindIt = m_StateEnterEventMap.find(newState);
     if (stateEnterFindIt != m_StateEnterEventMap.end())
     {
-        for (IEventDataPtr pEvent : stateEnterFindIt->second)
+        for (size_t i = 0; i < stateEnterFindIt->second.size(); i++)
         {
+            IEventDataPtr pEvent = stateEnterFindIt->second[i];
             IEventMgr::Get()->VQueueEvent(pEvent);
         }
     }
 
-    auto stateLeaveFindIt = m_StateLeaveEventMap.find(oldState);
+    StateChangeEventMap::iterator stateLeaveFindIt = m_StateLeaveEventMap.find(oldState);
     if (stateLeaveFindIt != m_StateLeaveEventMap.end())
     {
-        for (IEventDataPtr pEvent : stateLeaveFindIt->second)
+        for (size_t i = 0; i < stateLeaveFindIt->second.size(); i++)
         {
+            IEventDataPtr pEvent = stateLeaveFindIt->second[i];
             IEventMgr::Get()->VQueueEvent(pEvent);
         }
     }

@@ -63,6 +63,8 @@ private:
 
     bool m_bInitialized;
     bool m_bDead;
+    // Pixels per ms while flying off the screen after death
+    Point m_DeathSpeed;
     bool m_bHasStateLock;
     EnemyStateMap m_StateMap;
 

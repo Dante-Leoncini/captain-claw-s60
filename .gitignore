@@ -32,3 +32,9 @@ Build_Release/vim.exe.stackdump
 *.iobj
 *.ipdb
 *.exp
+symbian/sis/openclaw_sign.*
+build_sis/
+build_pc/
+build_prof/
+__pycache__/
+symbian/group/ABLD.BAT

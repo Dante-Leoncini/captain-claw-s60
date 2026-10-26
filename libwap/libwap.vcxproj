@@ -137,7 +137,7 @@
     <ClCompile Include="XmiFile.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="IO.h" />
+    <ClInclude Include="WapStream.h" />
     <ClInclude Include="libwap.h" />
     <ClInclude Include="Miniz.h" />
     <ClInclude Include="Util.h" />

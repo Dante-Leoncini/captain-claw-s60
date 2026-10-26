@@ -510,9 +510,9 @@ struct PathElevatorDef
         TiXmlElement* pPathElem = new TiXmlElement("ElevatorSteps");
         pPathElevatorComponent->LinkEndChild(pPathElem);
 
-        for (ElevatorStepDef& step : elevatorPath)
+        for (size_t i = 0; i < elevatorPath.size(); i++)
         {
-            pPathElem->LinkEndChild(step.ToXml());
+            pPathElem->LinkEndChild(elevatorPath[i].ToXml());
         }
 
         return pPathElevatorComponent;
@@ -780,8 +780,15 @@ struct SoundInfo
         attentuationFactor = 1.0f;
     }
 
-    SoundInfo(std::string sound) : SoundInfo()
+    SoundInfo(std::string sound)
     {
+        isMusic = false;
+        soundVolume = 100;
+        loops = 0;
+        setPositionEffect = false;
+        setDistanceEffect = false;
+        maxHearDistance = 0;
+        attentuationFactor = 1.0f;
         soundToPlay = sound;
     }
 

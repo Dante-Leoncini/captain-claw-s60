@@ -1220,9 +1220,9 @@ inline TiXmlElement* WwdObjectToXml(WwdObject* wwdObject, std::string& imagesRoo
         static std::vector<std::string> s_ReportedUnknownLogicsList;
 
         bool isAlreadyReported = false;
-        for (std::string &unkLogic : s_ReportedUnknownLogicsList)
+        for (size_t i = 0; i < s_ReportedUnknownLogicsList.size(); i++)
         {
-            if (unkLogic == logic)
+            if (s_ReportedUnknownLogicsList[i] == logic)
             {
                 isAlreadyReported = true;
                 break;

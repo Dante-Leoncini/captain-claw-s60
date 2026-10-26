@@ -91,9 +91,41 @@ namespace ActorTemplates
         { PickupType_Max,                       NULL },
     };
 
+    struct ImageSetToPickupTypeEntry
+    {
+        const char* imageSet;
+        PickupType pickupType;
+    };
+
+    struct PickupTypeToStringEntry
+    {
+        PickupType pickupType;
+        const char* str;
+    };
+
+    static std::map<std::string, PickupType> CreateImageSetToPickupTypeMap(const ImageSetToPickupTypeEntry* entries, size_t count)
+    {
+        std::map<std::string, PickupType> result;
+        for (size_t i = 0; i < count; i++)
+        {
+            result.insert(std::make_pair(std::string(entries[i].imageSet), entries[i].pickupType));
+        }
+        return result;
+    }
+
+    static std::map<PickupType, std::string> CreatePickupTypeToStringMap(const PickupTypeToStringEntry* entries, size_t count)
+    {
+        std::map<PickupType, std::string> result;
+        for (size_t i = 0; i < count; i++)
+        {
+            result.insert(std::make_pair(entries[i].pickupType, std::string(entries[i].str)));
+        }
+        return result;
+    }
+
     PickupType StringToEnum_ImageSetToPickupType(const std::string& pickupImageSet)
     {
-        static const std::map<std::string, PickupType> s_ImageSetToPickupTypeMap =
+        static const ImageSetToPickupTypeEntry s_ImageSetToPickupTypeEntries[] =
         {
             { "GAME_TREASURE_COINS", PickupType_Default },
             { "GAME_TREASURE_GOLDBARS", PickupType_Treasure_Goldbars },
@@ -158,8 +190,10 @@ namespace ActorTemplates
             { "GAME_POWERUPS_ICESWORD", PickupType_Powerup_FrostSword },
             { "GAME_BOSSWARP", PickupType_BossWarp },
         };
+        static const std::map<std::string, PickupType> s_ImageSetToPickupTypeMap =
+            CreateImageSetToPickupTypeMap(s_ImageSetToPickupTypeEntries, sizeof(s_ImageSetToPickupTypeEntries) / sizeof(s_ImageSetToPickupTypeEntries[0]));
 
-        auto findIt = s_ImageSetToPickupTypeMap.find(pickupImageSet);
+        std::map<std::string, PickupType>::const_iterator findIt = s_ImageSetToPickupTypeMap.find(pickupImageSet);
         if (findIt == s_ImageSetToPickupTypeMap.end())
         {
             LOG_ERROR("Could not find requested enum. Offending key: " + pickupImageSet);
@@ -171,7 +205,7 @@ namespace ActorTemplates
 
     std::string EnumToString_PickupTypeToImageSet(PickupType pickupType)
     {
-        static const std::map<PickupType, std::string> s_PickupTypeToImageSetMap =
+        static const PickupTypeToStringEntry s_PickupTypeToImageSetEntries[] =
         {
             { PickupType_Default,                   "GAME_TREASURE_COINS" },
             { PickupType_Treasure_Goldbars,         "GAME_TREASURE_GOLDBARS" },
@@ -235,8 +269,10 @@ namespace ActorTemplates
             { PickupType_BossWarp,                  "GAME_BOSSWARP" },
             { PickupType_Level2_Gem,                "LEVEL_GEM" },
         };
+        static const std::map<PickupType, std::string> s_PickupTypeToImageSetMap =
+            CreatePickupTypeToStringMap(s_PickupTypeToImageSetEntries, sizeof(s_PickupTypeToImageSetEntries) / sizeof(s_PickupTypeToImageSetEntries[0]));
 
-        auto findIt = s_PickupTypeToImageSetMap.find(pickupType);
+        std::map<PickupType, std::string>::const_iterator findIt = s_PickupTypeToImageSetMap.find(pickupType);
         if (findIt == s_PickupTypeToImageSetMap.end())
         {
             LOG_ERROR("Could not find requested enum. Offending key: " + ToStr((int)pickupType));
@@ -246,7 +282,7 @@ namespace ActorTemplates
         return findIt->second;
     }
 
-    std::map<PickupType, std::string> g_PickupTypeToPickupSoundMap =
+    static const PickupTypeToStringEntry g_PickupTypeToPickupSoundEntries[] =
     {
         { PickupType_Default,                   SOUND_GAME_TREASURE_COIN },
         { PickupType_Treasure_Goldbars,         SOUND_GAME_TREASURE_GOLDBAR },
@@ -310,6 +346,8 @@ namespace ActorTemplates
         { PickupType_BossWarp,                  SOUND_GAME_ENTER_WARP },
         { PickupType_Level2_Gem,                SOUND_GAME_MAPPIECE },
     };
+    std::map<PickupType, std::string> g_PickupTypeToPickupSoundMap =
+        CreatePickupTypeToStringMap(g_PickupTypeToPickupSoundEntries, sizeof(g_PickupTypeToPickupSoundEntries) / sizeof(g_PickupTypeToPickupSoundEntries[0]));
 
     //=====================================================================================================================
     // Helper functions
@@ -417,7 +455,7 @@ namespace ActorTemplates
             assert(false && "Invalid ammo image set");
         }
 
-        return { "", 0 };
+        return std::make_pair("", 0);
     }
 
     std::pair<std::string, uint32> GetPowerupTypeAndDurationFromImageset(const std::string& imageSet)
@@ -434,7 +472,7 @@ namespace ActorTemplates
             assert(false && "Invalid ammo image set");
         }
 
-        return { "", 0 };
+        return std::make_pair("", 0);
     }
 
     std::string GetImageSetFromClawAmmoType(AmmoType ammoType)
@@ -552,9 +590,9 @@ namespace ActorTemplates
     }
 
     
-    std::vector<std::pair<std::string, std::string>> GetSoundsFromActorLogic(const std::string& logic)
+    std::vector<std::pair<std::string, std::string> > GetSoundsFromActorLogic(const std::string& logic)
     {
-        std::vector <std::pair<std::string, std::string>> soundTypeAndNamePairList;
+        std::vector <std::pair<std::string, std::string> > soundTypeAndNamePairList;
         if (logic == "Soldier")
         {
             soundTypeAndNamePairList.push_back(std::make_pair(
@@ -649,8 +687,9 @@ namespace ActorTemplates
         XML_ADD_TEXT_ELEMENT("Inverted", ToStr(isInverted).c_str(), pComponent);
         XML_ADD_TEXT_ELEMENT("ZCoord", ToStr(zCoord).c_str(), pComponent);
 
-        for (const std::string &imagePath : imagePaths)
+        for (size_t i = 0; i < imagePaths.size(); i++)
         {
+            const std::string &imagePath = imagePaths[i];
             XML_ADD_TEXT_ELEMENT("ImagePath", imagePath.c_str(), pComponent);
         }
 
@@ -793,8 +832,9 @@ namespace ActorTemplates
         XML_ADD_TEXT_ELEMENT("PrefabType", pBodyDef->prefabType.c_str(), pPhysicsComponent);
 
         // Convert actor's fixtures to xml
-        for (const ActorFixtureDef &fixture : pBodyDef->fixtureList)
+        for (size_t i = 0; i < pBodyDef->fixtureList.size(); i++)
         {
+            const ActorFixtureDef &fixture = pBodyDef->fixtureList[i];
             pPhysicsComponent->LinkEndChild(ActorFixtureDefToXml(&fixture));
         }
 
@@ -815,8 +855,9 @@ namespace ActorTemplates
     {
         TiXmlElement* pLootComponent = new TiXmlElement("LootComponent");
         
-        for (auto item : loot)
+        for (size_t i = 0; i < loot.size(); i++)
         {
+            PickupType item = loot[i];
             XML_ADD_TEXT_ELEMENT("Item", ToStr(item).c_str(), pLootComponent);
         }
 
@@ -840,8 +881,9 @@ namespace ActorTemplates
         {
             XML_ADD_TEXT_ELEMENT("DeathAnimationName", deathAnimName.c_str(), pDestroyableComponent);
         }
-        for (auto &deathSound : deathSounds)
+        for (size_t i = 0; i < deathSounds.size(); i++)
         {
+            const std::string &deathSound = deathSounds[i];
             XML_ADD_TEXT_ELEMENT("DeathSound", deathSound.c_str(), pDestroyableComponent);
         }
 
@@ -858,8 +900,9 @@ namespace ActorTemplates
         AddXmlTextElement("DeleteOnDestruction", def.deleteOnDestruction, pDestroyableComponent);
         AddXmlTextElement("RemoveFromPhysics", def.removeFromPhysics, pDestroyableComponent);
         AddXmlTextElement("DeathAnimationName", def.deathAnimationName, pDestroyableComponent);
-        for (const std::string& deathSound : def.deathSoundList)
+        for (size_t i = 0; i < def.deathSoundList.size(); i++)
         {
+            const std::string& deathSound = def.deathSoundList[i];
             AddXmlTextElement("DeathSound", deathSound, pDestroyableComponent);
         }
 
@@ -930,8 +973,9 @@ namespace ActorTemplates
     TiXmlElement* CreateXmlData_TakeDamageState(const std::vector<std::string>& takeDamageAnims, int invulnerabilityTime)
     {
         TiXmlElement* pTakeDamageStateElem = new TiXmlElement("TakeDamageAIStateComponent");
-        for (const std::string& anim : takeDamageAnims)
+        for (size_t i = 0; i < takeDamageAnims.size(); i++)
         {
+            const std::string& anim = takeDamageAnims[i];
             XML_ADD_TEXT_ELEMENT("TakeDamageAnimation", anim.c_str(), pTakeDamageStateElem);
         }
         XML_ADD_TEXT_ELEMENT("InvulnerabilityTime", ToStr(invulnerabilityTime).c_str(), pTakeDamageStateElem);
@@ -955,8 +999,9 @@ namespace ActorTemplates
         {
             TiXmlElement* pIdleActionElem = new TiXmlElement("IdleAction");
             XML_ADD_TEXT_ELEMENT("AnimationDelay", ToStr(animationDelay).c_str(), pIdleActionElem);
-            for (auto &idleAnim : idleAnimations)
+            for (size_t i = 0; i < idleAnimations.size(); i++)
             {
+                const std::string &idleAnim = idleAnimations[i];
                 XML_ADD_TEXT_ELEMENT("Animation", idleAnim.c_str(), pIdleActionElem);
             }
             pPatrolStateElem->LinkEndChild(pIdleActionElem);
@@ -969,8 +1014,9 @@ namespace ActorTemplates
     {
         TiXmlElement* pPredefinedMovesElem = new TiXmlElement("PredefinedMoveComponent");
 
-        for (PredefinedMove& move : moves)
+        for (size_t i = 0; i < moves.size(); i++)
         {
+            PredefinedMove& move = moves[i];
             TiXmlElement* pMoveElem = new TiXmlElement("PredefinedMove");
             XML_ADD_TEXT_ELEMENT("DurationMiliseconds", ToStr(move.msDuration).c_str(), pMoveElem);
             XML_ADD_2_PARAM_ELEMENT("PixelsPerSecond", "x", ToStr(move.pixelsPerSecond.x).c_str(), 
@@ -986,7 +1032,7 @@ namespace ActorTemplates
 
     TiXmlElement* CreatePredefinedMoveComponent(const PredefinedMove& move, bool isInfinite)
     {
-        std::vector<PredefinedMove> moves = { move };
+        std::vector<PredefinedMove> moves(1, move);
         return CreatePredefinedMoveComponent(moves, isInfinite);
     }
 
@@ -1016,8 +1062,9 @@ namespace ActorTemplates
         TiXmlElement* pAttackStateElem = new TiXmlElement(componentName.c_str());
 
         TiXmlElement* pAttacksElem = new TiXmlElement("Attacks");
-        for (auto &attackAction : attackActions)
+        for (size_t i = 0; i < attackActions.size(); i++)
         {
+            EnemyAttackAction &attackAction = attackActions[i];
             TiXmlElement* pAttackActionElem = new TiXmlElement("AttackAction");
             XML_ADD_TEXT_ELEMENT("Animation", attackAction.animation.c_str(), pAttackActionElem);
             XML_ADD_TEXT_ELEMENT("AttackAnimFrameIdx", ToStr(attackAction.attackAnimFrameIdx).c_str(), pAttackActionElem);
@@ -1159,7 +1206,7 @@ namespace ActorTemplates
     template <typename K, typename V>
     V StrictFindValueInMap(const K& key, const std::map<K, V>& m)
     {
-        auto findIt = m.find(key);
+        typename std::map<K, V>::const_iterator findIt = m.find(key);
         if (findIt == m.end())
         {
             LOG_ERROR("Could not find key in specified map. Key: [" + ToStr(key) + "]");
@@ -1181,7 +1228,7 @@ namespace ActorTemplates
     }
 
     // TODO: What is this function specifically for ? Only dynamically spawned pickups ?
-    TiXmlElement* CreateXmlData_GeneralPickupActor(const std::string& imageSet, const Point& position, zIndexes zCoord, bool isStatic, const ParamMap& paramMap)
+    TiXmlElement* CreateXmlData_GeneralPickupActor(const std::string& imageSet, const Point& position, zIndexes::Type zCoord, bool isStatic, const ParamMap& paramMap)
     {
         TiXmlElement* pActorElem = new TiXmlElement("Actor");
         pActorElem->SetAttribute("Type", imageSet.c_str());
@@ -1200,7 +1247,7 @@ namespace ActorTemplates
 
         pActorElem->LinkEndChild(CreateTriggerComponent(1, false, false));
 
-        srand((long)pActorElem + time(NULL));
+        srand((long)(size_t)pActorElem + time(NULL));
         double speedX = 0.5 + (rand() % 100) / 50.0;
         double speedY = -(1 + (rand() % 100) / 50.0);
 
@@ -1539,7 +1586,10 @@ namespace ActorTemplates
 
         pActor->LinkEndChild(CreateCycleAnimationComponent(75, true));
         pActor->LinkEndChild(CreateLootComponent(loot, 33));
-        pActor->LinkEndChild(CreateDestroyableComponent(true, "DEFAULT", { SOUND_GAME_CRATE_BREAK1, SOUND_GAME_CRATE_BREAK2 }));
+        std::vector<std::string> deathSounds;
+        deathSounds.push_back(SOUND_GAME_CRATE_BREAK1);
+        deathSounds.push_back(SOUND_GAME_CRATE_BREAK2);
+        pActor->LinkEndChild(CreateDestroyableComponent(true, "DEFAULT", deathSounds));
         pActor->LinkEndChild(CreateHealthComponent(health, health));
 
         return pActor;
@@ -1591,7 +1641,7 @@ namespace ActorTemplates
         //AddXmlTextElement("ClampToGround", true, pActor->FirstChildElement("PhysicsComponent"));
 
         pActor->LinkEndChild(CreateAnimationComponent("/LEVEL1/ANIS/POWDERKEG/EXPLODE.ANI", true));
-        pActor->LinkEndChild(CreateDestroyableComponent(true, "explode", { SOUND_LEVEL1_KEG_EXPLODE }));
+        pActor->LinkEndChild(CreateDestroyableComponent(true, "explode", std::vector<std::string>(1, SOUND_LEVEL1_KEG_EXPLODE)));
         pActor->LinkEndChild(CreateHealthComponent(1, 1));
         pActor->LinkEndChild(CreateExplodeableComponent(Point(140, 140), damage));
 
@@ -1599,7 +1649,7 @@ namespace ActorTemplates
     }
 
     TiXmlElement* CreateXmlData_AreaDamageActor(const Point& position, const Point& size, int32 damage, CollisionFlag collisionFlag, const std::string& shape, DamageType damageType,
-            Direction hitDirection, int sourceActorId, const Point& positionOffset, const std::string& imageSet = "", zIndexes zCoord = zIndexes::MinIndex)
+            Direction hitDirection, int sourceActorId, const Point& positionOffset, const std::string& imageSet = "", zIndexes::Type zCoord = zIndexes::MinIndex)
     {
         TiXmlElement* pActor = new TiXmlElement("Actor");
         pActor->SetAttribute("Type", "AreaDamage");
@@ -1714,7 +1764,7 @@ namespace ActorTemplates
         return pActor;
     }
 
-    TiXmlElement* CreateXmlData_GlitterActor(const std::string& glitterType, const Point& position, zIndexes zCoord)
+    TiXmlElement* CreateXmlData_GlitterActor(const std::string& glitterType, const Point& position, zIndexes::Type zCoord)
     {
         std::string imageSet = GetImageSetFromGlitterType(glitterType);
 
@@ -1804,8 +1854,9 @@ namespace ActorTemplates
         TiXmlElement* pActorElem = g_pApp->GetActorPrototypeElem(actorProto);
         assert(pActorElem != NULL);
 
-        for (XmlNodeOverride& xmlOverride : overrides)
+        for (size_t i = 0; i < overrides.size(); i++)
         {
+            XmlNodeOverride& xmlOverride = overrides[i];
             xmlOverride.Apply(pActorElem);
         }
 
@@ -1827,8 +1878,9 @@ namespace ActorTemplates
         //----------- Loot
         TiXmlElement* pLootComponentElem = GetTiXmlElementFromPath(pActorElem, "Actor.LootComponent");
         assert(pLootComponentElem != NULL);
-        for (PickupType item : loot)
+        for (size_t i = 0; i < loot.size(); i++)
         {
+            PickupType item = loot[i];
             XML_ADD_TEXT_ELEMENT("Item", ToStr((int)item).c_str(), pLootComponentElem);
         }
 
@@ -1919,8 +1971,9 @@ namespace ActorTemplates
         //----------- Loot
         TiXmlElement* pLootComponentElem = GetTiXmlElementFromPath(pActorElem, "Actor.LootComponent");
         assert(pLootComponentElem != NULL);
-        for (PickupType item : loot)
+        for (size_t i = 0; i < loot.size(); i++)
         {
+            PickupType item = loot[i];
             XML_ADD_TEXT_ELEMENT("Item", ToStr((int)item).c_str(), pLootComponentElem);
         }
 
@@ -1945,8 +1998,9 @@ namespace ActorTemplates
         //----------- SpawnAreaComponent
         TiXmlElement* pActorSpawnerComponent = GetTiXmlElementFromPath(pActorElem, "Actor.ActorSpawnerComponent");
         assert(pActorSpawnerComponent != NULL);
-        for (const ActorSpawnInfo& spawnInfo : spawnedActorList)
+        for (size_t i = 0; i < spawnedActorList.size(); i++)
         {
+            const ActorSpawnInfo& spawnInfo = spawnedActorList[i];
             TiXmlElement* pActorSpawnInfoElem = new TiXmlElement("ActorSpawnInfo");
             AddXmlTextElement("ActorPrototype", EnumToString_ActorPrototype(spawnInfo.actorProto), pActorSpawnInfoElem);
             XML_ADD_2_PARAM_ELEMENT("SpawnPositionOffset", 
@@ -2060,8 +2114,9 @@ namespace ActorTemplates
         TiXmlElement* pPathElevatorStepsElem = GetTiXmlElementFromPath(pActorElem, "Actor.PathElevatorComponent.ElevatorSteps");
         assert(pPathElevatorStepsElem != NULL);
 
-        for (const ElevatorStepDef &stepDef : def.elevatorPath)
+        for (size_t i = 0; i < def.elevatorPath.size(); i++)
         {
+            const ElevatorStepDef &stepDef = def.elevatorPath[i];
             pPathElevatorStepsElem->LinkEndChild(stepDef.ToXml());
         }
 
@@ -2218,7 +2273,7 @@ namespace ActorTemplates
             //=========================================================================================================
             // TakeDamage
 
-            std::vector<std::string> takeDamageAnims = { "hithigh" };
+            std::vector<std::string> takeDamageAnims(1, "hithigh");
             pActor->LinkEndChild(CreateXmlData_TakeDamageState(takeDamageAnims, 0));
 
             //=========================================================================================================
@@ -2284,7 +2339,7 @@ namespace ActorTemplates
             //=========================================================================================================
             // TakeDamage
 
-            std::vector<std::string> takeDamageAnims = { "hithigh" };
+            std::vector<std::string> takeDamageAnims(1, "hithigh");
             pActor->LinkEndChild(CreateXmlData_TakeDamageState(takeDamageAnims, 0));
 
             //=========================================================================================================
@@ -2361,9 +2416,10 @@ namespace ActorTemplates
         }
 
         // Add sounds associated to given enemy
-        auto soundTypeAndNamePairs = GetSoundsFromActorLogic(logicName);
-        for (std::pair<std::string, std::string> &soundTypeAndNamePair : soundTypeAndNamePairs)
+        std::vector<std::pair<std::string, std::string> > soundTypeAndNamePairs = GetSoundsFromActorLogic(logicName);
+        for (size_t i = 0; i < soundTypeAndNamePairs.size(); i++)
         {
+            std::pair<std::string, std::string> &soundTypeAndNamePair = soundTypeAndNamePairs[i];
             XML_ADD_2_PARAM_ELEMENT("Sound", "SoundType", soundTypeAndNamePair.first.c_str(), 
                 "SoundName", soundTypeAndNamePair.second.c_str(), pEnemyAIElem);
         }
@@ -2499,7 +2555,7 @@ namespace ActorTemplates
         return CreateAndReturnActor(CreateXmlData_PickupActor(pickupType, position, isStatic));
     }
 
-    StrongActorPtr CreateRenderedActor(const Point& position, const std::string& imageSet, const std::string& animPath, zIndexes zCoord)
+    StrongActorPtr CreateRenderedActor(const Point& position, const std::string& imageSet, const std::string& animPath, zIndexes::Type zCoord)
     {
         TiXmlElement* pActor = new TiXmlElement("Actor");
         pActor->SetAttribute("Type", imageSet.c_str());
@@ -2545,12 +2601,12 @@ namespace ActorTemplates
             sourceActorId));
     }
 
-    StrongActorPtr CreateAreaDamage(const Point& position, const Point& size, int32 damage, CollisionFlag collisionFlag, const std::string& shape, DamageType damageType, Direction hitDirection, int sourceActorId, const Point& positionOffset, const std::string& imageSet, zIndexes zCoord)
+    StrongActorPtr CreateAreaDamage(const Point& position, const Point& size, int32 damage, CollisionFlag collisionFlag, const std::string& shape, DamageType damageType, Direction hitDirection, int sourceActorId, const Point& positionOffset, const std::string& imageSet, zIndexes::Type zCoord)
     {
         return CreateAndReturnActor(CreateXmlData_AreaDamageActor(position, size, damage, collisionFlag, shape, damageType, hitDirection, sourceActorId, positionOffset, imageSet, zCoord));
     }
 
-    StrongActorPtr CreateGlitter(const std::string& glitterType, const Point& position, zIndexes zCoord)
+    StrongActorPtr CreateGlitter(const std::string& glitterType, const Point& position, zIndexes::Type zCoord)
     {
         return CreateAndReturnActor(CreateXmlData_GlitterActor(glitterType, position, zCoord));
     }

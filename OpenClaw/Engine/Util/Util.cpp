@@ -1,7 +1,8 @@
 #include <assert.h>
 #include <string>
 #include <sstream>
-#include <random>
+#include <stdlib.h>
+#include <time.h>
 #include <iostream>
 
 #include "Util.h"
@@ -52,7 +53,7 @@ namespace Util
             vec.push_back(str);
         }
 
-        if (str.back() == ' ')
+        if (str[str.size() - 1] == ' ')
         {
             vec.push_back(std::string(""));
         }
@@ -105,6 +106,14 @@ namespace Util
         cout << "WWD RECT: " << "left = " << rect.left << ", top = " << rect.top << ", right = " << rect.right << ", bottom = " << rect.bottom << endl;
     }
 
+    static TileCollisionRectangle MakeTileCollisionRectangle(CollisionType collisionType, const SDL_Rect& collisionRect)
+    {
+        TileCollisionRectangle tileCollisionRect;
+        tileCollisionRect.collisionType = collisionType;
+        tileCollisionRect.collisionRect = collisionRect;
+        return tileCollisionRect;
+    }
+
     void ParseCollisionRectanglesFromTile(TileCollisionPrototype* tilePrototype, TileDescription* tileDesc)
     {
         SDL_Rect tileRect = { 0, 0, 64, 64 };//WwdRectToSDLRect(tileDesc->rect);
@@ -122,7 +131,7 @@ namespace Util
         {
             //myfile << "Tile 0" << endl;
             SDL_Rect r = { 0, 0, tileDesc->width, tileDesc->height };
-            tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->insideAttrib), fullRect });
+            tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->insideAttrib), fullRect));
             return;
         }
         else if (tileDesc->type == WAP_TILE_TYPE_DOUBLE)
@@ -144,8 +153,8 @@ namespace Util
                 SDL_Rect rect1 = { tileRect.x, tileRect.y, tileDesc->width, tileDesc->rect.bottom };
                 // Outside rect
                 SDL_Rect rect2 = { tileRect.x, tileRect.y + tileDesc->rect.bottom + 1, tileDesc->width, tileDesc->height - tileDesc->rect.bottom };
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->insideAttrib), rect1 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect2 });
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->insideAttrib), rect1));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect2));
                 //myfile << "Tile 1" << endl;
             }
             // My paper case (2)
@@ -160,8 +169,8 @@ namespace Util
                 SDL_Rect rect1 = { tileRect.x + tileDesc->rect.left, tileRect.y, tileDesc->width - tileDesc->rect.left, tileDesc->height };
                 // Outside rect
                 SDL_Rect rect2 = { tileRect.x, tileRect.y, tileDesc->rect.left, tileDesc->height };
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->insideAttrib), rect1 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect2 });
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->insideAttrib), rect1));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect2));
                 /*myfile << "Inside Rect x-y:w-h = " << rect1.x << "-" << rect1.y << ":" << rect1.w << "-" << rect1.h << endl;
                 myfile << "Outside Rect x-y:w-h = " << rect2.x << "-" << rect2.y << ":" << rect2.w << "-" << rect2.h << endl;
                 myfile << "Tile 2" << endl;*/
@@ -175,8 +184,8 @@ namespace Util
                 SDL_Rect rect1 = { tileRect.x, tileRect.y + tileDesc->rect.top, tileDesc->width, tileDesc->height - tileDesc->rect.top };
                 // Outside rect
                 SDL_Rect rect2 = { tileRect.x, tileRect.y, tileDesc->width, tileDesc->rect.top };
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->insideAttrib), rect1 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect2 });
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->insideAttrib), rect1));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect2));
                 /*myfile << "Inside Rect x-y:w-h = " << rect1.x << "-" << rect1.y << ":" << rect1.w << "-" << rect1.h << endl;
                 myfile << "Outside Rect x-y:w-h = " << rect2.x << "-" << rect2.y << ":" << rect2.w << "-" << rect2.h << endl;
                 myfile << "Tile 3" << endl;*/
@@ -190,8 +199,8 @@ namespace Util
                 SDL_Rect rect1 = { tileRect.x, tileRect.y, tileDesc->rect.right, tileDesc->height };
                 // Outside rect
                 SDL_Rect rect2 = { tileRect.x + tileDesc->rect.right + 1, tileRect.y, tileDesc->width - tileDesc->rect.right, tileDesc->height };
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->insideAttrib), rect1 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect2 });
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->insideAttrib), rect1));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect2));
                 /*myfile << "Inside Rect x-y:w-h = " << rect1.x << "-" << rect1.y << ":" << rect1.w << "-" << rect1.h << endl;
                 myfile << "Outside Rect x-y:w-h = " << rect2.x << "-" << rect2.y << ":" << rect2.w << "-" << rect2.h << endl;
                 myfile << "Tile 4" << endl;*/
@@ -210,9 +219,9 @@ namespace Util
                 SDL_Rect rect1 = { 0, 0, tileDesc->width, tileDesc->rect.top };
                 SDL_Rect rect2 = { 0, 0, tileDesc->width, tileDesc->rect.bottom - tileDesc->rect.top };
                 SDL_Rect rect3 = { 0, tileDesc->rect.bottom, tileDesc->width, tileDesc->height - tileDesc->rect.bottom };
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect1 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->insideAttrib), rect2 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect3 });
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect1));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->insideAttrib), rect2));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect3));
 
                 //LOG("TileId: " + ToStr(tileDesc->tileId));
 
@@ -230,9 +239,9 @@ namespace Util
                 SDL_Rect rect1 = { 0, 0, tileDesc->rect.left, tileDesc->height };
                 SDL_Rect rect2 = { tileDesc->rect.left, 0, tileDesc->rect.right - tileDesc->rect.left, tileDesc->height };
                 SDL_Rect rect3 = { tileDesc->rect.right, 0, tileDesc->width - tileDesc->rect.right, tileDesc->height };
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect1 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->insideAttrib), rect2 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect3 });
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect1));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->insideAttrib), rect2));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect3));
                 //assert(false && "Paring rects case: 6");
             }
             // My paper case (7) --- PAPERFIED
@@ -243,9 +252,9 @@ namespace Util
                 SDL_Rect rect1 = { tileRect.x, tileRect.y, tileDesc->rect.right, tileDesc->rect.bottom };
                 SDL_Rect rect2 = { tileRect.x, tileRect.y + tileDesc->rect.bottom + 1, tileDesc->rect.right + 1, tileDesc->height - tileDesc->rect.bottom };
                 SDL_Rect rect3 = { tileRect.x + tileDesc->rect.right + 1, tileRect.y, tileDesc->width - tileDesc->rect.right, tileDesc->height };
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->insideAttrib), rect1 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect2 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect3 });
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->insideAttrib), rect1));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect2));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect3));
                 /*myfile << "Inside Rect x-y:w-h = " << rect1.x << "-" << rect1.y << ":" << rect1.w << "-" << rect1.h << endl;
                 myfile << "Outside Rect 1 x-y:w-h = " << rect2.x << "-" << rect2.y << ":" << rect2.w << "-" << rect2.h << endl;
                 myfile << "Outside Rect 2 x-y:w-h = " << rect3.x << "-" << rect3.y << ":" << rect3.w << "-" << rect3.h << endl;
@@ -264,9 +273,9 @@ namespace Util
                 SDL_Rect rect1 = { tileRect.x + tileDesc->rect.left, tileRect.y, tileDesc->width - tileDesc->rect.left, tileDesc->rect.bottom };
                 SDL_Rect rect2 = { tileRect.x, tileRect.y, tileDesc->rect.left - 1, tileDesc->height };
                 SDL_Rect rect3 = { tileRect.x + tileDesc->rect.left, tileRect.y + tileDesc->rect.bottom + 1, tileDesc->width - tileDesc->rect.left, tileDesc->height - tileDesc->rect.bottom - 1 };
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->insideAttrib), rect1 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect2 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect3 });
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->insideAttrib), rect1));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect2));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect3));
                 /*myfile << "Inside Rect x-y:w-h = " << rect1.x << "-" << rect1.y << ":" << rect1.w << "-" << rect1.h << endl;
                 myfile << "Outside Rect 1 x-y:w-h = " << rect2.x << "-" << rect2.y << ":" << rect2.w << "-" << rect2.h << endl;
                 myfile << "Outside Rect 2 x-y:w-h = " << rect3.x << "-" << rect3.y << ":" << rect3.w << "-" << rect3.h << endl;
@@ -280,9 +289,9 @@ namespace Util
                 SDL_Rect rect1 = { tileRect.x + tileDesc->rect.left, tileRect.y + tileDesc->rect.top, tileDesc->width - tileDesc->rect.left, tileDesc->height - tileDesc->rect.top };
                 SDL_Rect rect2 = { tileRect.x, tileRect.y, tileDesc->rect.left, tileDesc->height };
                 SDL_Rect rect3 = { tileRect.x + tileDesc->rect.left, tileRect.y, tileDesc->width - tileDesc->rect.left, tileDesc->rect.top };
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->insideAttrib), rect1 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect2 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect3 });
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->insideAttrib), rect1));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect2));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect3));
                 /*myfile << "Inside Rect x-y:w-h = " << rect1.x << "-" << rect1.y << ":" << rect1.w << "-" << rect1.h << endl;
                 myfile << "Outside Rect 1 x-y:w-h = " << rect2.x << "-" << rect2.y << ":" << rect2.w << "-" << rect2.h << endl;
                 myfile << "Outside Rect 2 x-y:w-h = " << rect3.x << "-" << rect3.y << ":" << rect3.w << "-" << rect3.h << endl;
@@ -296,9 +305,9 @@ namespace Util
                 SDL_Rect rect1 = { tileRect.x, tileRect.y + tileDesc->rect.top, tileDesc->rect.right, tileDesc->height - tileDesc->rect.top };
                 SDL_Rect rect2 = { tileRect.x, tileRect.y, tileDesc->rect.right, tileDesc->rect.top };
                 SDL_Rect rect3 = { tileRect.x + tileDesc->rect.right, tileRect.y, tileDesc->width - tileDesc->rect.right, tileDesc->height };
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->insideAttrib), rect1 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect2 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect3 });
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->insideAttrib), rect1));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect2));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect3));
                 /*myfile << "Inside Rect x-y:w-h = " << rect1.x << "-" << rect1.y << ":" << rect1.w << "-" << rect1.h << endl;
                 myfile << "Outside Rect 1 x-y:w-h = " << rect2.x << "-" << rect2.y << ":" << rect2.w << "-" << rect2.h << endl;
                 myfile << "Outside Rect 2 x-y:w-h = " << rect3.x << "-" << rect3.y << ":" << rect3.w << "-" << rect3.h << endl;
@@ -312,7 +321,7 @@ namespace Util
                 (IsInBetween(tileDesc->rect.right, 0, tileDesc->width - 1)) && (IsInBetween(tileDesc->rect.bottom, 0, tileDesc->height - 1)))
             {
                 SDL_Rect rect1 = { tileDesc->rect.left, tileDesc->rect.top, tileDesc->rect.right - tileDesc->rect.left, tileDesc->rect.bottom };
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->insideAttrib), rect1 });
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->insideAttrib), rect1));
 
                 assert(tileDesc->insideAttrib != WAP_TILE_ATTRIBUTE_CLEAR && tileDesc->outsideAttrib == WAP_TILE_ATTRIBUTE_CLEAR);
             }
@@ -334,10 +343,10 @@ namespace Util
                 SDL_Rect rect2 = { tileRect.x, tileRect.y, tileDesc->rect.left, tileDesc->height };
                 SDL_Rect rect3 = { tileRect.x + tileDesc->rect.left, tileRect.y, tileDesc->rect.right - tileDesc->rect.left, tileDesc->rect.top };
                 SDL_Rect rect4 = { tileRect.x + tileDesc->rect.right, tileRect.y, tileDesc->width - tileDesc->rect.right, tileDesc->height };
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->insideAttrib), rect1 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect2 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect3 });
-                tilePrototype->collisionRectangles.push_back({ CollisionType(tileDesc->outsideAttrib), rect4 });
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->insideAttrib), rect1));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect2));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect3));
+                tilePrototype->collisionRectangles.push_back(MakeTileCollisionRectangle(CollisionType(tileDesc->outsideAttrib), rect4));
                 /*myfile << "Inside Rect x-y:w-h = " << rect1.x << "-" << rect1.y << ":" << rect1.w << "-" << rect1.h << endl;
                 myfile << "Outside Rect 1 x-y:w-h = " << rect2.x << "-" << rect2.y << ":" << rect2.w << "-" << rect2.h << endl;
                 myfile << "Outside Rect 2 x-y:w-h = " << rect3.x << "-" << rect3.y << ":" << rect3.w << "-" << rect3.h << endl;
@@ -386,11 +395,14 @@ namespace Util
 
     int GetRandomNumber(int fromRange, int toRange)
     {
-        static std::random_device rd;
-        std::mt19937 rng(rd());
-        std::uniform_int_distribution<int> uni(fromRange, toRange);
+        static bool s_bSeeded = false;
+        if (!s_bSeeded)
+        {
+            srand((unsigned int)time(NULL));
+            s_bSeeded = true;
+        }
 
-        return uni(rng);
+        return fromRange + (int)(rand() % (unsigned int)(toRange - fromRange + 1));
     }
 
     bool RollDice(int chanceToSucceed)
@@ -546,6 +558,38 @@ namespace Util
         return pTextureRect;
     }
 
+    void FadeScreen(DrawFrameFunction drawFrame, void* pUserData, int fromAlpha, int toAlpha, Uint32 durationMs)
+    {
+        SDL_Renderer* pRenderer = g_pApp->GetRenderer();
+        const Uint32 start = SDL_GetTicks();
+        for (;;)
+        {
+            const Uint32 elapsed = SDL_GetTicks() - start;
+            const double t = elapsed >= durationMs ? 1.0 : (double)elapsed / durationMs;
+
+            drawFrame(pUserData);
+
+            float scaleX, scaleY;
+            SDL_RenderGetScale(pRenderer, &scaleX, &scaleY);
+            SDL_RenderSetScale(pRenderer, 1.0f, 1.0f);
+            SDL_SetRenderDrawColor(pRenderer, 0, 0, 0, (Uint8)(fromAlpha + (toAlpha - fromAlpha) * t));
+            SDL_RenderFillRect(pRenderer, NULL);
+            SDL_RenderSetScale(pRenderer, scaleX, scaleY);
+            RenderForcePresent(pRenderer);
+
+            if (t >= 1.0)
+            {
+                break;
+            }
+            // (events are dropped meanwhile: keys pressed during a fade do nothing)
+            SDL_Event evt;
+            while (SDL_PollEvent(&evt))
+            {
+            }
+            SDL_Delay(10);
+        }
+    }
+
     void RenderForcePresent(SDL_Renderer* pRenderer) {
         SDL_RenderPresent(pRenderer);
 #ifdef __EMSCRIPTEN__
@@ -566,8 +610,9 @@ namespace Util
 
     void PlayRandomHitSound()
     {
-        static std::vector<std::string> hitSounds =
+        static const char* const s_HitSoundNames[] =
         { SOUND_GAME_HIT1, SOUND_GAME_HIT2, SOUND_GAME_HIT3, SOUND_GAME_HIT4 };
+        static std::vector<std::string> hitSounds(s_HitSoundNames, s_HitSoundNames + 4);
 
         PlayRandomSoundFromList(hitSounds);
     }

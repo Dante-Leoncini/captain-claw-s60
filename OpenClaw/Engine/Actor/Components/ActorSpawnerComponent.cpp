@@ -53,7 +53,7 @@ void ActorSpawnerComponent::VPostInit()
 
     if (!m_SpawnAnimation.empty())
     {
-        auto pAC = MakeStrongPtr(m_pOwner->GetComponent<AnimationComponent>());
+        shared_ptr<AnimationComponent> pAC = MakeStrongPtr(m_pOwner->GetComponent<AnimationComponent>());
         if (pAC)
         {
             pAC->AddObserver(this);
@@ -68,8 +68,9 @@ void ActorSpawnerComponent::VOnActorEnteredTrigger(Actor* pActorWhoPickedThis, F
         return;
     }
 
-    for (const ActorSpawnInfo& actorSpawnInfo : m_ActorSpawnInfoList)
+    for (size_t i = 0; i < m_ActorSpawnInfoList.size(); i++)
     {
+        const ActorSpawnInfo& actorSpawnInfo = m_ActorSpawnInfoList[i];
         Point spawnPosition = m_pOwner->GetPositionComponent()->GetPosition() + actorSpawnInfo.spawnPositionOffset;
 
         StrongActorPtr pSpawnedActor =
@@ -80,7 +81,7 @@ void ActorSpawnerComponent::VOnActorEnteredTrigger(Actor* pActorWhoPickedThis, F
 
     if (!m_SpawnAnimation.empty())
     {
-        auto pAC = MakeStrongPtr(m_pOwner->GetComponent<AnimationComponent>());
+        shared_ptr<AnimationComponent> pAC = MakeStrongPtr(m_pOwner->GetComponent<AnimationComponent>());
         if (pAC)
         {
             pAC->SetAnimation(m_SpawnAnimation);
@@ -93,6 +94,6 @@ void ActorSpawnerComponent::VOnActorEnteredTrigger(Actor* pActorWhoPickedThis, F
 
 void ActorSpawnerComponent::VOnAnimationLooped(Animation* pAnimation)
 {
-    auto pAC = MakeStrongPtr(m_pOwner->GetComponent<AnimationComponent>());
+    shared_ptr<AnimationComponent> pAC = MakeStrongPtr(m_pOwner->GetComponent<AnimationComponent>());
     pAC->PauseAnimation();
 }
